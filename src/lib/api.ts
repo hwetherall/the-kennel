@@ -10,6 +10,9 @@ import type {
 } from '../types'
 import {
   demoEndQuarter,
+  demoPlaceBet,
+  demoMarketAction,
+  demoMutation,
   demoHostSnapshot,
   demoPause,
   demoPlayerSnapshot,
@@ -35,13 +38,17 @@ function publicFunctionUrl() {
   return `https://${appKey}.function2.insforge.app/kennel-api`
 }
 
+export class ApiError extends Error {
+  constructor(message: string, public readonly uncertain: boolean) { super(message) }
+}
+
 interface InvokeOptions {
   playerToken?: string
   hostToken?: string
   idempotencyKey?: string
 }
 
-async function invoke<T>(action: string, payload = {}, options: InvokeOptions = {}) {
+async function invokeRaw<T>(action: string, payload = {}, options: InvokeOptions = {}) {
   if (!backendConfigured) throw new Error('Backend is not configured')
 
   const headers: Record<string, string> = {}
@@ -64,17 +71,18 @@ async function invoke<T>(action: string, payload = {}, options: InvokeOptions = 
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify({ action, ...payload }),
+      signal: AbortSignal.timeout(15_000),
     })
     data = await response.json().catch(() => null)
     if (!response.ok) {
       const message = data && typeof data === 'object' && 'error' in data
         ? String(data.error)
         : `The Kennel server returned ${response.status}`
-      error = { message }
+      throw new ApiError(message, response.status >= 500 || response.status === 408)
     }
   }
 
-  if (error) throw new Error(error.message || 'The Kennel could not reach the server')
+  if (error) throw new ApiError(error.message || 'The Kennel could not reach the server', true)
   const response = data as { data?: T; error?: string } | T
   if (response && typeof response === 'object' && 'error' in response && response.error) {
     throw new Error(response.error)
@@ -83,6 +91,29 @@ async function invoke<T>(action: string, payload = {}, options: InvokeOptions = 
     return response.data as T
   }
   return response as T
+}
+
+async function invoke<T>(action: string, payload = {}, options: InvokeOptions = {}) {
+  const storageKey = options.hostToken && options.idempotencyKey ? `kennel-pending-host:${options.hostToken}` : null
+  if (storageKey) sessionStorage.setItem(storageKey, JSON.stringify({ action, payload, key: options.idempotencyKey }))
+  try {
+    const result = await invokeRaw<T>(action, payload, options)
+    if (storageKey) sessionStorage.removeItem(storageKey)
+    return result
+  } catch (error) {
+    if (storageKey && error instanceof ApiError && !error.uncertain) sessionStorage.removeItem(storageKey)
+    throw error
+  }
+}
+
+export function pendingHostMutation(hostToken?: string) {
+  if (!hostToken) return null
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(`kennel-pending-host:${hostToken}`) ?? 'null')
+    if (!saved) return null
+    return { label: String(saved.action).replaceAll('_', ' '), key: String(saved.key),
+      action: (key: string) => invoke<HostSnapshot>(saved.action, saved.payload, { hostToken, idempotencyKey: key }) }
+  } catch { return null }
 }
 
 export async function getPublicSnapshot() {
@@ -96,7 +127,7 @@ export async function joinPlayer(
   claimEmail: string,
   sessionToken: string,
 ) {
-  if (!backendConfigured) return demoPlayerSnapshot(`${nickname}:${sessionToken}`)
+  if (!backendConfigured) return demoPlayerSnapshot(sessionToken)
   return invoke<PlayerSnapshot>('join', { nickname, claimEmail, sessionToken })
 }
 
@@ -127,7 +158,7 @@ export async function recordScore(
   idempotencyKey: string,
 ) {
   if (!backendConfigured) {
-    demoRecordScore(team, scoreType)
+    demoMutation(idempotencyKey, () => demoRecordScore(team, scoreType))
     return demoHostSnapshot()
   }
   return invoke<HostSnapshot>('record_score', { team, scoreType }, { hostToken, idempotencyKey })
@@ -135,7 +166,7 @@ export async function recordScore(
 
 export async function undoLatestScore(hostToken: string, idempotencyKey: string) {
   if (!backendConfigured) {
-    demoUndo()
+    demoMutation(idempotencyKey, () => demoUndo())
     return demoHostSnapshot()
   }
   return invoke<HostSnapshot>('undo_latest_score', {}, { hostToken, idempotencyKey })
@@ -143,7 +174,7 @@ export async function undoLatestScore(hostToken: string, idempotencyKey: string)
 
 export async function setPause(hostToken: string, paused: boolean, idempotencyKey: string) {
   if (!backendConfigured) {
-    demoPause(paused)
+    demoMutation(idempotencyKey, () => demoPause(paused))
     return demoHostSnapshot()
   }
   return invoke<HostSnapshot>('set_pause', { paused }, { hostToken, idempotencyKey })
@@ -151,7 +182,7 @@ export async function setPause(hostToken: string, paused: boolean, idempotencyKe
 
 export async function startQuarter(hostToken: string, quarter: number, idempotencyKey: string) {
   if (!backendConfigured) {
-    demoStartQuarter(quarter)
+    demoMutation(idempotencyKey, () => demoStartQuarter(quarter))
     return demoHostSnapshot()
   }
   return invoke<HostSnapshot>('start_quarter', { quarter }, { hostToken, idempotencyKey })
@@ -159,7 +190,7 @@ export async function startQuarter(hostToken: string, quarter: number, idempoten
 
 export async function endQuarter(hostToken: string, idempotencyKey: string) {
   if (!backendConfigured) {
-    demoEndQuarter()
+    demoMutation(idempotencyKey, () => demoEndQuarter())
     return demoHostSnapshot()
   }
   return invoke<HostSnapshot>('end_quarter', {}, { hostToken, idempotencyKey })
@@ -173,7 +204,7 @@ export async function setGrid(
   idempotencyKey: string,
 ) {
   if (!backendConfigured) {
-    demoSetGrid(homeTeam, awayTeam, grid)
+    demoMutation(idempotencyKey, () => demoSetGrid(homeTeam, awayTeam, grid))
     return demoHostSnapshot()
   }
   return invoke<HostSnapshot>(
@@ -194,4 +225,19 @@ export async function linkPurchase(
     { purchaseId, playerId },
     { hostToken, idempotencyKey },
   )
+}
+
+export async function placeBet(playerToken: string, marketId: string, optionId: string, stake: number, idempotencyKey: string) {
+  if (!backendConfigured) return demoPlaceBet(playerToken, marketId, optionId, stake, idempotencyKey)
+  return invoke<PlayerSnapshot>('place_bet', { marketId, optionId, stake }, { playerToken, idempotencyKey })
+}
+
+export type MarketAction = 'lock_market' | 'settle_market' | 'void_market' | 'open_next_goal'
+export async function marketAction(hostToken: string, action: MarketAction,
+  payload: { marketId?: string; winningOptionId?: string; reason?: string }, idempotencyKey: string) {
+  if (!backendConfigured) {
+    demoMutation(idempotencyKey, () => demoMarketAction(action, payload))
+    return demoHostSnapshot()
+  }
+  return invoke<HostSnapshot>(action, payload, { hostToken, idempotencyKey })
 }

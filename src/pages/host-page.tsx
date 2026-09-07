@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import { HostMarkets } from '../components/host-markets'
+import { QuarterResults } from '../components/quarter-results'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { OfflineBanner } from '../components/offline-banner'
 import { Scoreboard } from '../components/scoreboard'
 import { useLiveHostSnapshot } from '../hooks/use-live-snapshot'
 import {
   endQuarter,
+  ApiError,
+  pendingHostMutation,
+  marketAction,
   hostLogin,
   linkPurchase,
   recordScore,
@@ -13,7 +18,7 @@ import {
   startQuarter,
   undoLatestScore,
 } from '../lib/api'
-import { shuffledDigits } from '../lib/game'
+import { LAST_DIGITS, shuffledDigits } from '../lib/game'
 import {
   clearHostSession,
   getHostSession,
@@ -25,19 +30,29 @@ import { LoadingScreen } from './punter-page'
 
 export function HostPage() {
   const [session, setSession] = useState<HostSession | null>(() => getHostSession())
-  const { snapshot, setSnapshot, loading, error, online } = useLiveHostSnapshot(session?.token)
+  const { snapshot, setSnapshot, loading, error, online, refresh } = useLiveHostSnapshot(session?.token)
   const [actionError, setActionError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
 
-  async function act(label: string, action: () => Promise<HostSnapshot>) {
-    if (!session || !online || busy) return
+  const inFlight = useRef(false)
+  const [pending, setPending] = useState<{ label: string; key: string; action: (key: string) => Promise<HostSnapshot> } | null>(() => pendingHostMutation(session?.token))
+
+  async function act(label: string, action: (key: string) => Promise<HostSnapshot>, retryKey?: string) {
+    if (!session || !online || inFlight.current || (pending && !retryKey)) return
+    const key = retryKey ?? newIdempotencyKey()
+    inFlight.current = true
     setBusy(label)
     setActionError(null)
     try {
-      setSnapshot(await action())
+      setSnapshot(await action(key))
+      await refresh()
+      setPending(null)
     } catch (caught) {
+      if (!(caught instanceof ApiError) || caught.uncertain) setPending({ label, key, action })
+      else setPending(null)
       setActionError(caught instanceof Error ? caught.message : 'Host action failed')
     } finally {
+      inFlight.current = false
       setBusy(null)
     }
   }
@@ -50,7 +65,7 @@ export function HostPage() {
 
   const nextQuarter = Math.min(4, snapshot.game.quarter + 1)
   const isLive = snapshot.game.periodStatus === 'live'
-  const scoreDisabled = Boolean(busy) || !online || !isLive
+  const scoreDisabled = (Boolean(busy) || Boolean(pending)) || !online || !isLive
 
   return (
     <div className="host-shell">
@@ -71,13 +86,16 @@ export function HostPage() {
         <Scoreboard event={snapshot.event} game={snapshot.game} />
         {(actionError || error) && <div className="inline-error" role="alert">{actionError || error}</div>}
 
+        {pending && <div className="inline-error" role="status">The {pending.label} request needs confirmation. Other controls wait until its result is known.
+          <button className="button" disabled={Boolean(busy) || !online} onClick={() => void act(pending.label, pending.action, pending.key)}>Retry original host request</button>
+        </div>}
         <section className="host-card score-controls">
           <div className="host-card__heading">
             <div><span className="eyebrow">Q{snapshot.game.quarter}</span><h2>Score entry</h2></div>
             <button
               className="button button--danger-outline"
-              disabled={!snapshot.game.canUndo || Boolean(busy) || !online}
-              onClick={() => void act('undo', () => undoLatestScore(session.token, newIdempotencyKey()))}
+              disabled={!snapshot.game.canUndo || (Boolean(busy) || Boolean(pending)) || !online}
+              onClick={() => void act('undo', (key) => undoLatestScore(session.token, key))}
             >
               {busy === 'undo' ? 'Undoing…' : '↶ Undo last score'}
             </button>
@@ -87,13 +105,13 @@ export function HostPage() {
               disabled={scoreDisabled}
               label={`${snapshot.event.homeTeam} goal`}
               points="+6"
-              onClick={() => void act('home-goal', () => recordScore(session.token, 'home', 'goal', newIdempotencyKey()))}
+              onClick={() => void act('home-goal', (key) => recordScore(session.token, 'home', 'goal', key))}
             />
             <ScoreButton
               disabled={scoreDisabled}
               label={`${snapshot.event.homeTeam} behind`}
               points="+1"
-              onClick={() => void act('home-behind', () => recordScore(session.token, 'home', 'behind', newIdempotencyKey()))}
+              onClick={() => void act('home-behind', (key) => recordScore(session.token, 'home', 'behind', key))}
               secondary
             />
             <ScoreButton
@@ -101,14 +119,14 @@ export function HostPage() {
               disabled={scoreDisabled}
               label={`${snapshot.event.awayTeam} goal`}
               points="+6"
-              onClick={() => void act('away-goal', () => recordScore(session.token, 'away', 'goal', newIdempotencyKey()))}
+              onClick={() => void act('away-goal', (key) => recordScore(session.token, 'away', 'goal', key))}
             />
             <ScoreButton
               away
               disabled={scoreDisabled}
               label={`${snapshot.event.awayTeam} behind`}
               points="+1"
-              onClick={() => void act('away-behind', () => recordScore(session.token, 'away', 'behind', newIdempotencyKey()))}
+              onClick={() => void act('away-behind', (key) => recordScore(session.token, 'away', 'behind', key))}
               secondary
             />
           </div>
@@ -122,11 +140,11 @@ export function HostPage() {
               {!isLive && snapshot.game.periodStatus !== 'final' && (
                 <button
                   className="button button--wide button--gold"
-                  disabled={Boolean(busy) || !online}
-                  onClick={() => void act('start', () => startQuarter(
+                  disabled={(Boolean(busy) || Boolean(pending)) || !online}
+                  onClick={() => void act('start', (key) => startQuarter(
                     session.token,
                     snapshot.game.periodStatus === 'pre_match' ? 1 : nextQuarter,
-                    newIdempotencyKey(),
+                    key,
                   ))}
                 >
                   Start {snapshot.game.periodStatus === 'pre_match' ? 'Q1' : `Q${nextQuarter}`}
@@ -135,47 +153,50 @@ export function HostPage() {
               {isLive && (
                 <button
                   className="button button--wide"
-                  disabled={Boolean(busy) || !online}
-                  onClick={() => void act('end', () => endQuarter(session.token, newIdempotencyKey()))}
+                  disabled={(Boolean(busy) || Boolean(pending)) || !online}
+                  onClick={() => void act('end', (key) => endQuarter(session.token, key))}
                 >
                   Sound Q{snapshot.game.quarter} siren
                 </button>
               )}
               <button
                 className={snapshot.game.bettingPaused ? 'button button--wide button--green' : 'button button--wide button--danger'}
-                disabled={Boolean(busy) || !online}
-                onClick={() => void act('pause', () => setPause(
+                disabled={(Boolean(busy) || Boolean(pending)) || !online}
+                onClick={() => void act('pause', (key) => setPause(
                   session.token,
                   !snapshot.game.bettingPaused,
-                  newIdempotencyKey(),
+                  key,
                 ))}
               >
-                {snapshot.game.bettingPaused ? 'Resume game' : 'Pause all game actions'}
+                {snapshot.game.bettingPaused ? 'Resume betting' : 'Pause betting'}
               </button>
             </div>
           </section>
 
           <GridSettings
-            disabled={Boolean(busy) || !online || snapshot.game.homePoints + snapshot.game.awayPoints > 0}
+            disabled={(Boolean(busy) || Boolean(pending)) || !online || snapshot.game.homePoints + snapshot.game.awayPoints > 0}
             snapshot={snapshot}
-            onSave={(homeTeam, awayTeam, rowDigits, colDigits) => void act('grid', () => setGrid(
+            onSave={(homeTeam, awayTeam, rowDigits, colDigits) => void act('grid', (key) => setGrid(
               session.token,
               homeTeam,
               awayTeam,
               { rowDigits, colDigits },
-              newIdempotencyKey(),
+              key,
             ))}
           />
         </div>
 
+        <QuarterResults results={snapshot.quarterResults} />
+        <HostMarkets key={snapshot.activeMarket?.id ?? 'none'} snapshot={snapshot} disabled={Boolean(busy) || Boolean(pending) || !online}
+          onAction={(action, payload) => void act(action, (key) => marketAction(session.token, action, payload, key))} />
         <PurchaseLinker
-          disabled={Boolean(busy) || !online}
+          disabled={(Boolean(busy) || Boolean(pending)) || !online}
           snapshot={snapshot}
-          onLink={(purchaseId, playerId) => void act('link', () => linkPurchase(
+          onLink={(purchaseId, playerId) => void act('link', (key) => linkPurchase(
             session.token,
             purchaseId,
             playerId,
-            newIdempotencyKey(),
+            key,
           ))}
         />
       </main>
@@ -285,6 +306,9 @@ function GridSettings({
       <div className="digit-preview"><span>Home</span>{rows.map((digit) => <i key={digit}>{digit}</i>)}</div>
       <div className="digit-preview"><span>Away</span>{columns.map((digit) => <i key={digit}>{digit}</i>)}</div>
       <div className="inline-actions">
+        <button className="button button--ghost" disabled={disabled} onClick={() => { setRows([...LAST_DIGITS]); setColumns([...LAST_DIGITS]) }}>
+          Order 0–9
+        </button>
         <button className="button button--ghost" disabled={disabled} onClick={() => { setRows(shuffledDigits()); setColumns(shuffledDigits()) }}>
           Shuffle digits
         </button>

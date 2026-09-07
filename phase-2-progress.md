@@ -79,3 +79,11 @@ repeated settlement/reversal cycles.
 4. Demo, complete the approval gate, and only then promote the backend and deploy the completed experience to production.
 
 This increment is approved for code integration. Phase 2 remains incomplete and is not ready for production backend promotion or the final product gate. The next-thread instructions are in `phase-3.md` on the handoff branch.
+
+## Prerequisite completion work on the Phase 3 handoff branch
+
+The remaining Phase 2 interface, resilience, demo, and rehearsal work is being
+completed before any Phase 3 feature. See [phase-3-progress.md](phase-3-progress.md)
+for the current verification record, branch preview, discovered connection limit,
+and approval boundary. The backend remains isolated on `phase-2-kennel`; no
+production promotion has occurred.

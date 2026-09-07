@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { MarketCard } from '../components/market-card'
+import { Ladder } from '../components/ladder'
+import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { OfflineBanner } from '../components/offline-banner'
 import { QuarterResults } from '../components/quarter-results'
@@ -15,7 +17,7 @@ export function PunterPage() {
   const [session, setSession] = useState<PlayerSession | null>(() => getPlayerSession())
   const [tab, setTab] = useState<Tab>('squares')
   const [joinOpen, setJoinOpen] = useState(!session)
-  const { snapshot, loading, error, online, refresh } = useLiveSnapshot(session?.token)
+  const { snapshot, loading, error, online, refresh, setSnapshot } = useLiveSnapshot(session?.token)
   const playerSnapshot = snapshot && 'player' in snapshot ? (snapshot as PlayerSnapshot) : null
   const latestResult = useMemo(
     () => snapshot?.quarterResults.slice().sort((a, b) => b.quarter - a.quarter)[0],
@@ -115,21 +117,15 @@ export function PunterPage() {
           </>
         )}
 
-        {tab === 'kennel' && (
-          <ComingSoon
-            eyebrow="Phase 2"
-            title="Put your Bones where your mouth is."
-            body="Next Goal markets land here after the Squares board is match-night ready. Bones have no cash value."
-          />
-        )}
+        {tab === 'kennel' && snapshot && <MarketCard key={session?.token ?? 'public'} snapshot={snapshot} token={session?.token}
+          online={online} reconcile={setSnapshot} refresh={refresh} />}
+        {tab === 'ladder' && snapshot && <div className="kennel-stack">
+          <p>Rankings use settled net profit, never balance or total stakes.</p>
+          <Ladder title={`Q${snapshot.game.quarter} ladder`} entries={snapshot.quarterLadder} />
+          <Ladder title={snapshot.game.periodStatus === 'final' ? 'Top Dog · final' : 'Top Dog · provisional'} entries={snapshot.topDogLadder} />
+          {snapshot.quarterResults.map((result) => <Ladder key={result.quarter} title={`Q${result.quarter} · final standings`} entries={result.quarterLadder} playerId={playerSnapshot?.player.id} />)}
+        </div>}
 
-        {tab === 'ladder' && (
-          <ComingSoon
-            eyebrow="Phase 2"
-            title="Top Dog is still in the sheds."
-            body="The quarter ladder and overall standings will appear here once the prediction game opens."
-          />
-        )}
       </main>
 
       {joinOpen && (
@@ -161,11 +157,13 @@ function JoinDialog({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const joinToken = useRef(newOpaqueToken())
+
   async function submit(event: React.FormEvent) {
     event.preventDefault()
     setBusy(true)
     setError(null)
-    const randomToken = newOpaqueToken()
+    const randomToken = joinToken.current
     const token = backendConfigured ? randomToken : `${nickname.trim()}:${randomToken}`
     try {
       await joinPlayer(nickname.trim(), email.trim(), token)
@@ -215,17 +213,6 @@ function JoinDialog({
         </form>
       </div>
     </div>
-  )
-}
-
-function ComingSoon({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
-  return (
-    <section className="coming-soon">
-      <span className="eyebrow">{eyebrow}</span>
-      <div className="bone-mark" aria-hidden="true">◆</div>
-      <h1>{title}</h1>
-      <p>{body}</p>
-    </section>
   )
 }
 

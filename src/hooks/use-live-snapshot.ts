@@ -1,137 +1,93 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { HostSnapshot, PlayerSnapshot, PublicSnapshot } from '../types'
 import { backendConfigured, getHostSnapshot, getPlayerSnapshot, getPublicSnapshot, insforge } from '../lib/api'
 import { subscribeDemo } from '../lib/demo'
 
-const LIVE_EVENTS = ['score_updated', 'score_undone', 'quarter_updated', 'pause_updated', 'grid_updated']
+const LIVE_EVENTS = ['score_updated', 'score_undone', 'quarter_updated', 'pause_updated', 'grid_updated',
+  'market_updated', 'bet_updated', 'balance_updated', 'ladder_updated']
 
-function useNetworkStatus() {
-  const [online, setOnline] = useState(() => navigator.onLine)
+export function newerSnapshot<T extends PublicSnapshot>(current: T | null, next: T): T {
+  if (!current || next.game.version > current.game.version) return next
+  if (next.game.version < current.game.version) return current
+  return Date.parse(next.serverNow) >= Date.parse(current.serverNow) ? next : current
+}
+
+function useSnapshot<T extends PublicSnapshot>(identity: string, fetchSnapshot: () => Promise<T>, enabled = true) {
+  const [snapshot, updateSnapshot] = useState<T | null>(null)
+  const [loading, setLoading] = useState(enabled)
+  const [error, setError] = useState<string | null>(null)
+  const [online, setOnline] = useState(false)
+  const currentIdentity = useRef(identity)
+  currentIdentity.current = identity
+  const networkEpoch = useRef(0)
+  const latestRequest = useRef(0)
+  const setSnapshot = useCallback((next: T) => {
+    if (currentIdentity.current === identity) updateSnapshot((old) => newerSnapshot(old, next))
+  }, [identity])
+  const refresh = useCallback(async () => {
+    if (!enabled) return
+    const request = ++latestRequest.current
+    const epoch = networkEpoch.current
+    try {
+      const next = await fetchSnapshot()
+      if (currentIdentity.current !== identity || epoch !== networkEpoch.current) return
+      setSnapshot(next)
+      if (request === latestRequest.current) {
+        setOnline(navigator.onLine)
+        setError(null)
+      }
+    } catch (caught) {
+      if (currentIdentity.current !== identity || request !== latestRequest.current) return
+      setOnline(false)
+      setError(caught instanceof Error ? caught.message : 'Could not load match state')
+    } finally {
+      if (currentIdentity.current === identity) setLoading(false)
+    }
+  }, [enabled, fetchSnapshot, identity, setSnapshot])
 
   useEffect(() => {
-    const connected = () => setOnline(true)
-    const disconnected = () => setOnline(false)
-    window.addEventListener('online', connected)
-    window.addEventListener('offline', disconnected)
-    return () => {
-      window.removeEventListener('online', connected)
-      window.removeEventListener('offline', disconnected)
+    updateSnapshot(null)
+    setLoading(enabled)
+    setOnline(false)
+    setError(null)
+    void refresh()
+    const offline = () => { networkEpoch.current++; setOnline(false) }
+    const reconnect = () => { offline(); void refresh() }
+    window.addEventListener('offline', offline)
+    window.addEventListener('online', reconnect)
+    const visible = () => { if (document.visibilityState === 'visible') reconnect() }
+    document.addEventListener('visibilitychange', visible)
+    // Poll even with realtime: event delivery is an optimization, never a requirement.
+    const interval = window.setInterval(() => { if (navigator.onLine) void refresh() }, 4_000)
+    const unsubscribe = !backendConfigured ? subscribeDemo(() => void refresh()) : undefined
+    const realtime = insforge?.realtime
+    const changed = () => void refresh()
+    const connect = () => { void realtime?.subscribe('game:live').then(refresh).catch(() => {}) }
+    if (enabled && realtime) {
+      LIVE_EVENTS.forEach((event) => realtime.on(event, changed))
+      realtime.on('connect', connect)
+      void realtime.connect().then(connect).catch(() => {})
     }
-  }, [])
-
-  return online
+    return () => {
+      networkEpoch.current++
+      window.clearInterval(interval)
+      window.removeEventListener('offline', offline)
+      window.removeEventListener('online', reconnect)
+      document.removeEventListener('visibilitychange', visible)
+      unsubscribe?.()
+      LIVE_EVENTS.forEach((event) => realtime?.off(event, changed))
+      realtime?.off('connect', connect)
+    }
+  }, [enabled, refresh])
+  return { snapshot, setSnapshot, loading, error, online, refresh }
 }
 
 export function useLiveSnapshot(playerToken?: string | null) {
-  const [snapshot, setSnapshot] = useState<PublicSnapshot | PlayerSnapshot | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const browserOnline = useNetworkStatus()
-  const [realtimeOnline, setRealtimeOnline] = useState(true)
-
-  const refresh = useCallback(async () => {
-    try {
-      const next = playerToken
-        ? await getPlayerSnapshot(playerToken)
-        : await getPublicSnapshot()
-      setSnapshot(next)
-      setError(null)
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not load match state')
-    } finally {
-      setLoading(false)
-    }
-  }, [playerToken])
-
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
-
-  useEffect(() => {
-    if (!backendConfigured) return subscribeDemo(() => void refresh())
-    if (!insforge) {
-      setRealtimeOnline(true)
-      const interval = window.setInterval(() => void refresh(), 4_000)
-      return () => window.clearInterval(interval)
-    }
-    const realtime = insforge.realtime
-
-    let active = true
-    const onChanged = () => void refresh()
-    const onConnect = () => {
-      if (!active) return
-      setRealtimeOnline(true)
-      void realtime.subscribe('game:live').then(() => refresh())
-    }
-    const onDisconnect = () => active && setRealtimeOnline(false)
-
-    LIVE_EVENTS.forEach((event) => realtime.on(event, onChanged))
-    realtime.on('connect', onConnect)
-    realtime.on('disconnect', onDisconnect)
-    realtime.on('connect_error', onDisconnect)
-    void realtime.connect().then(() => realtime.subscribe('game:live')).then(() => {
-      if (active) setRealtimeOnline(true)
-    }).catch(() => {
-      if (active) setRealtimeOnline(false)
-    })
-
-    return () => {
-      active = false
-      LIVE_EVENTS.forEach((event) => realtime.off(event, onChanged))
-      realtime.off('connect', onConnect)
-      realtime.off('disconnect', onDisconnect)
-      realtime.off('connect_error', onDisconnect)
-      realtime.unsubscribe('game:live')
-    }
-  }, [refresh])
-
-  return {
-    snapshot,
-    loading,
-    error,
-    online: browserOnline && realtimeOnline,
-    refresh,
-  }
+  const fetchSnapshot = useCallback(() => playerToken ? getPlayerSnapshot(playerToken) : getPublicSnapshot(), [playerToken])
+  return useSnapshot<PublicSnapshot | PlayerSnapshot>(playerToken ?? 'public', fetchSnapshot)
 }
 
 export function useLiveHostSnapshot(hostToken?: string | null) {
-  const [snapshot, setSnapshot] = useState<HostSnapshot | null>(null)
-  const [loading, setLoading] = useState(Boolean(hostToken))
-  const [error, setError] = useState<string | null>(null)
-  const browserOnline = useNetworkStatus()
-
-  const refresh = useCallback(async () => {
-    if (!hostToken) {
-      setSnapshot(null)
-      setLoading(false)
-      return
-    }
-    try {
-      setSnapshot(await getHostSnapshot(hostToken))
-      setError(null)
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not load host console')
-    } finally {
-      setLoading(false)
-    }
-  }, [hostToken])
-
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
-
-  useEffect(() => {
-    if (!hostToken) return
-    if (!backendConfigured) return subscribeDemo(() => void refresh())
-    if (!insforge) {
-      const interval = window.setInterval(() => void refresh(), 4_000)
-      return () => window.clearInterval(interval)
-    }
-    const realtime = insforge.realtime
-    const onChanged = () => void refresh()
-    LIVE_EVENTS.forEach((event) => realtime.on(event, onChanged))
-    return () => LIVE_EVENTS.forEach((event) => realtime.off(event, onChanged))
-  }, [hostToken, refresh])
-
-  return { snapshot, setSnapshot, loading, error, online: browserOnline, refresh }
+  const fetchSnapshot = useCallback(() => getHostSnapshot(hostToken!), [hostToken])
+  return useSnapshot<HostSnapshot>(hostToken ?? 'host-locked', fetchSnapshot, Boolean(hostToken))
 }

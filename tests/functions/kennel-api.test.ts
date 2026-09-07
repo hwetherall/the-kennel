@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import handler from '../../functions/kennel-api'
 
 const { databaseRpc, insert } = vi.hoisted(() => ({ databaseRpc: vi.fn(), insert: vi.fn() }))
@@ -18,6 +18,8 @@ function request(body: unknown, headers: Record<string, string> = {}) {
     headers: { 'Content-Type': 'application/json', ...headers },
   }))
 }
+
+afterEach(() => vi.useRealTimers())
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -118,4 +120,26 @@ describe('Phase 2 edge boundary', () => {
     expect((await handler(new Request('https://example.invalid', { method: 'POST', body: '{' }))).status).toBe(400)
     expect(databaseRpc).not.toHaveBeenCalled()
   })
+})
+
+it.each(['53300', 'PGRST000'])('retries refused database connections (%s) with the same actor and stake key', async (code) => {
+  vi.useFakeTimers()
+  databaseRpc.mockResolvedValueOnce({ error: { code, message: 'Database connection error. Retrying the connection.' } })
+    .mockResolvedValueOnce({ data: { accepted: true }, error: null })
+  const pending = request({ action: 'place_bet', marketId, optionId, stake: 25 }, { 'X-Player-Token': token, 'Idempotency-Key': key })
+  // Hashing uses WebCrypto; wait for the first RPC before advancing the retry clock.
+  await vi.waitFor(() => expect(databaseRpc).toHaveBeenCalledTimes(1))
+  await vi.runAllTimersAsync()
+  expect((await pending).status).toBe(200)
+  expect(databaseRpc.mock.calls[1]).toEqual(databaseRpc.mock.calls[0])
+})
+it('bounds capacity retries and returns a safe retryable error', async () => {
+  vi.useFakeTimers()
+  databaseRpc.mockResolvedValue({ error: { code: '53300', message: 'sorry, too many clients already' } })
+  const pending = request({ action: 'public_snapshot' })
+  await vi.runAllTimersAsync()
+  const response = await pending
+  expect(response.status).toBe(503)
+  expect(databaseRpc).toHaveBeenCalledTimes(6)
+  expect(await response.text()).not.toContain('clients')
 })
