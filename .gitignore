@@ -13,3 +13,15 @@
 .roo
 .trae
 .windsurf
+
+# Local configuration and generated files
+.env
+.env.local
+.env.*.local
+node_modules
+dist
+*.tsbuildinfo
+coverage
+playwright-report
+test-results
+.DS_Store
