@@ -6,6 +6,7 @@ Updated 7 September 2026. The product contract and acceptance criteria remain in
 
 - Implementation branch: `codex/phase-2-kennel`, originally created from verified `main` at `66fe8e1`.
 - Harry explicitly authorized merging this backend/API increment into `main` on 7 September 2026 and preparing `codex/phase-3-studs-futures` for a new-thread handoff. This code-integration exception does not declare Phase 2 complete or authorize production backend promotion.
+- PR #3 is now merged at `197e496`; the handoff branch was created from that merge. `phase-3.md` contains the next-thread plan and explicitly carries forward the unfinished Phase 2 work.
 - InsForge backend: `phase-2-kennel`, schema-only, ready, selected in the local CLI. Confirmed against the CLI branch list in this session.
 - Branch API: `https://bk8ptwjs-zww.function2.insforge.app/kennel-api`.
 - Ignored `.env.local` points to the branch. The prior configuration is backed up in ignored `.env.phase-one.local`. Browser polling uses no API key.
