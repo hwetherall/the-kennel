@@ -4,6 +4,12 @@ Updated 7 September 2026. Follow [phase-3.md](phase-3.md) in order.
 
 ## Current position: Phase 2 prerequisite gate
 
+Draft prerequisite PR: https://github.com/hwetherall/the-kennel/pull/4
+Implementation commits: `7c76335` and `2ba8c44`. The second commit separates
+concurrent Squares-order changes while leaving those working files intact.
+The hosted preview now uses the isolated PR code, rather than the combined
+working tree. No code PR or backend has been merged as part of this work.
+
 The existing code branch is `codex/phase-3-studs-futures`, based on `197e496`
 with handoff commit `762ed56`. The selected backend is the ready, schema-only
 `phase-2-kennel` branch. No Phase 3 backend has been created and no Phase 3
@@ -33,20 +39,23 @@ three Phase 2 migrations recorded in `phase-2-progress.md`.
 - Baseline: 50 unit/component/edge tests, production build, six Phase 1 browser
   tests, both rolled-back database suites (including five recovery scenarios),
   and 17 read-only deployed edge checks passed.
-- Current workspace: 64 unit/component/edge tests pass. This includes one
-  concurrently added Squares-order test outside this prerequisite increment.
+- Isolated prerequisite PR: 63 unit/component/edge tests and production build
+  pass. The combined working tree passes 64 tests, including one concurrent
+  Squares-order test outside this increment. Ten browser flows also pass from
+  the isolated PR source.
 - Ten phone/desktop demo browser flows pass, including 360px width,
   goal-payout spending and undo, pause, offline events, quarter finalization,
   recovery confirmation, and projector fit at 1920×1080.
 - Production build passes with the existing SDK `crypto` externalization warning.
 - Branch preview: https://bk8ptwjs-zww.insforge.site
-  (deployment `cf4510f0-ac83-412b-9fa7-7c7de8c739aa`).
+  (deployment `8a34aae1-f063-4e39-9615-9d6901e8d175`).
 - Branch edge: https://bk8ptwjs-zww.function2.insforge.app/kennel-api
 - Advisor scan `e6b88770-8f51-4209-82a7-d2630ba9e250` completed with zero critical,
   zero warning, and three informational unused-index findings. Historical
   slow-query analysis did not run because `pg_stat_statements` was unavailable.
 - Backend merge dry-run reported 23 additions, 13 modifications, zero conflicts.
-  Its three migration records carry the table changes that the standalone table
+  The refreshed final dry-run includes the deployed connection retry and no
+  destructive table drops. Its three migration records carry the table changes that the standalone table
   diff reports as unsupported. The repeated table/index creation is guarded by
   `IF NOT EXISTS`; function replacements retain the migration-established access
   boundary. No user-table data is promoted by the merge.
@@ -71,9 +80,9 @@ requested but not authorized or performed.
 
 The two-player authenticated HTTP and live-browser rehearsal passes. Its 33 HTTP
 checks have zero unexpected errors and four deliberate validation rejections;
-latency p50 244 ms, p95 466 ms, max 467 ms. The live preview separately proves
+latency p50 235 ms, p95 439 ms, max 493 ms. The live preview separately proves
 two guests staking, goal payout, deliberately lost HTTP response after commit,
-original-key retry after reload, goal undo, actual browser offline/reconnect,
+guest and host original-key retries after reload, goal undo, actual browser offline/reconnect,
 siren, and phone/host/projector/print. Balances, pools, payout+dust conservation,
 exact reversals, and the append-only guard reconcile. See
 `phase-2-smoke-results.json`. Synthetic rows were cleaned up afterward.
@@ -95,7 +104,7 @@ unchanged guest. Interrupted runs retain an ignored, mode-0600 manifest for
 
 1. Resolve the 60-player load gate; the two-player HTTP/preview flow is verified. Refresh
    the merge dry-run after the final edge deployment.
-2. Open the scoped prerequisite PR, demo the preview, and obtain Phase 2 production
+2. Review draft PR #4 and demo the preview, then obtain Phase 2 production
    promotion approval. No production backend, live-site, or code merge is approved
    by the earlier backend/API-only code-integration exception.
 3. Promote Phase 2, merge its PR, and smoke-test the live site.

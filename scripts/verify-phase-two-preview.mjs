@@ -26,7 +26,21 @@ export async function verifyPreview({ appUrl, guest, opponent, hostSession }) {
     await host.goto(`${appUrl}/host`)
     await expect(host.getByRole('heading', { name: 'Match control' })).toBeVisible()
     const balance = Number((await page.locator('.bones-card > strong').textContent()).replaceAll(',', ''))
+    let originalHostKey
+    let retriedHostKey
+    await host.route('**/kennel-api', async (route) => {
+      if (route.request().method() !== 'POST' || route.request().postDataJSON()?.action !== 'record_score') return route.continue()
+      if (!originalHostKey) {
+        originalHostKey = route.request().headers()['idempotency-key']
+        await route.fetch(); await route.abort('failed')
+      } else { retriedHostKey = route.request().headers()['idempotency-key']; await route.continue() }
+    })
     await host.getByRole('button', { name: 'Home goal', exact: false }).click()
+    await expect(host.getByRole('button', { name: 'Retry original host request' })).toBeEnabled()
+    await host.reload()
+    await host.getByRole('button', { name: 'Retry original host request' }).click()
+    await expect(host.getByRole('button', { name: 'Retry original host request' })).toHaveCount(0)
+    expect(retriedHostKey).toBe(originalHostKey)
     await expect(page.locator('.bones-card > strong')).toHaveText((balance + 150).toLocaleString(), { timeout: 15000 })
     // Lost HTTP response after commit: browser must retry the original key, even after a reload.
     let originalKey
@@ -70,6 +84,6 @@ export async function verifyPreview({ appUrl, guest, opponent, hostSession }) {
     await projector.goto(`${appUrl}/host/print`)
     await expect(projector.getByRole('button', { name: 'Print grid' })).toBeVisible()
     expect(errors).toEqual([])
-    console.log('Live preview passed: two guests, goal, lost-response original-key retry, undo, offline/reconnect, siren, phone/host/projector/print.')
+    console.log('Live preview passed: two guests, goal, guest and host lost-response original-key retries, undo, offline/reconnect, siren, phone/host/projector/print.')
   } finally { await browser.close() }
 }

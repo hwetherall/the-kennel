@@ -5,9 +5,9 @@
   "expectedRejections": 4,
   "errors": 0,
   "latencyMs": {
-    "p50": 244,
-    "p95": 466,
-    "max": 467
+    "p50": 235,
+    "p95": 439,
+    "max": 493
   },
   "invariants": {
     "balances": true,
