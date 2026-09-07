@@ -2,6 +2,73 @@ export type TeamSide = 'home' | 'away'
 export type ScoreType = 'goal' | 'behind'
 export type PeriodStatus = 'pre_match' | 'live' | 'break' | 'final'
 
+export type MarketStatus = 'draft' | 'open' | 'locked' | 'settled' | 'void'
+
+export interface MarketOption {
+  id: string
+  marketId: string
+  optionKey: TeamSide
+  label: string
+  poolBones: number
+  sortOrder: number
+  betCount: number
+}
+
+export interface SettlementSummary {
+  winningPoolBones: number
+  losingPoolBones: number
+  dustBones: number
+}
+
+export interface MarketSummary {
+  id: string
+  sequence: number
+  type: 'next_goal'
+  quarter: number
+  title: string
+  status: MarketStatus
+  opensAt: string | null
+  locksAt: string | null
+  settledAt: string | null
+  winningOptionId: string | null
+  maxStake: number | null
+  countsTowardQuarterPrize: boolean
+  sponsorLabel: string | null
+  voidReason: string | null
+  betCount: number
+  totalPoolBones: number
+  settlement: SettlementSummary | null
+  options: MarketOption[]
+}
+
+export interface PlayerMarketPosition {
+  id: string
+  marketId: string
+  optionId: string
+  stake: number
+  payout: number | null
+  profit: number | null
+  settledAt: string | null
+}
+
+export interface LadderEntry {
+  rank: number
+  playerId: string
+  nickname: string
+  profit: number
+  isMe: boolean
+}
+
+export interface LedgerEntry {
+  id: string
+  kind: 'courtesy_grant' | 'square_bonus' | 'stake' | 'payout' | 'refund' | 'bark'
+  amount: number
+  marketId: string | null
+  reversalOfId: string | null
+  balanceAfter: number
+  createdAt: string
+}
+
 export interface EventConfig {
   eventName: string
   eventCode: string
@@ -47,6 +114,7 @@ export interface QuarterResult {
   winningSquareId: number
   winnerLabel: string | null
   settledAt: string
+  quarterLadder: LadderEntry[]
 }
 
 export interface PublicSnapshot {
@@ -56,6 +124,10 @@ export interface PublicSnapshot {
   grid: GridConfig
   squares: Square[]
   quarterResults: QuarterResult[]
+  activeMarket: MarketSummary | null
+  recentMarket: MarketSummary | null
+  quarterLadder: LadderEntry[]
+  topDogLadder: LadderEntry[]
 }
 
 export interface PlayerSummary {
@@ -63,6 +135,7 @@ export interface PlayerSummary {
   nickname: string
   squaresCount: number
   isSquareHolder: boolean
+  balance: number
 }
 
 export interface PurchaseSummary {
@@ -74,11 +147,14 @@ export interface PurchaseSummary {
 }
 
 export interface PlayerSnapshot extends PublicSnapshot {
-  player: PlayerSummary
+  player: PlayerSummary & { quarterRank: number | null; topDogRank: number | null }
   ownedSquareIds: number[]
+  activeBet: PlayerMarketPosition | null
+  recentActivity: LedgerEntry[]
 }
 
 export interface HostSnapshot extends PublicSnapshot {
+  markets: MarketSummary[]
   players: PlayerSummary[]
   purchases: PurchaseSummary[]
 }

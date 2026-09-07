@@ -471,12 +471,12 @@ Undo must continue to work for every latest score, including a goal that automat
 
 For undoing a latest goal, in one transaction:
 
-1. Lock the latest active score event and both linked markets.
-2. Void the market opened by that goal.
-3. Refund any stakes placed on the newly opened market, appending `refund` ledger rows.
+1. Acquire the shared game lock, then lock the latest active score event and its linked markets.
+2. Visit all Next Goal markets in that quarter from the goal's opened market onwards, in descending market sequence. This includes later markets opened through host recovery.
+3. Leave already-void markets and their refunds intact. For each settled later market, append exact negative reversals of its settlement credits and clear its settlement before voiding it. Void each unresolved later market and refund every stake. Completing each market newest-first restores spent Bones before reversing an earlier payout.
 4. Find every payout/refund ledger row created by settlement of the prior market.
 5. Append exact negative reversal rows with `reversal_of_id` links.
-6. Reduce affected player balances by those credits. Refunding the newly opened market first ensures Bones spent there are restored before payout reversal.
+6. Reduce affected player balances by those credits. Unwinding later markets first ensures Bones spent or lost there are restored before payout reversal.
 7. Clear settlement values from the prior market and its bets.
 8. Restore the prior market to `open` only if server time is still before its original lock; otherwise restore it to `locked`.
 9. Soft-void the score event and recompute score totals using the existing Phase 1 rule.
@@ -485,6 +485,8 @@ For undoing a latest goal, in one transaction:
 An undo remains forbidden after its quarter result is settled, matching Phase 1.
 
 Tests must prove that goal → bet on new market → undo leaves balances, pools, bets, market states, and ledger totals consistent.
+
+Harry approved this recovery rule on 7 September 2026: undo also reverses later manually settled results. Cover multiple recovery markets, previously voided markets, consecutive goal undos, refund-producing original settlements, and a goal recorded with no active prior market. Repeated undo must never reverse a void's already-issued refunds again.
 
 ---
 
