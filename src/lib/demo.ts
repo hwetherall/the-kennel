@@ -52,6 +52,10 @@ let state: PublicSnapshot = {
           : null,
   })),
   quarterResults: [],
+  activeMarket: null,
+  recentMarket: null,
+  quarterLadder: [],
+  topDogLadder: [],
 }
 
 const listeners = new Set<() => void>()
@@ -88,17 +92,23 @@ export function demoPlayerSnapshot(token: string): PlayerSnapshot {
       nickname,
       squaresCount: 2,
       isSquareHolder: true,
+      balance: 1500,
+      quarterRank: null,
+      topDogRank: null,
     },
     ownedSquareIds: [1, 53],
+    activeBet: null,
+    recentActivity: [],
   }
 }
 
 export function demoHostSnapshot(): HostSnapshot {
   return {
     ...demoPublicSnapshot(),
+    markets: [],
     players: [
-      { id: 'demo-player', nickname: 'Harry', squaresCount: 2, isSquareHolder: true },
-      { id: 'demo-player-2', nickname: 'Macca', squaresCount: 1, isSquareHolder: true },
+      { id: 'demo-player', nickname: 'Harry', squaresCount: 2, isSquareHolder: true, balance: 1500 },
+      { id: 'demo-player-2', nickname: 'Macca', squaresCount: 1, isSquareHolder: true, balance: 1250 },
     ],
     purchases: [],
   }
@@ -159,6 +169,7 @@ export function demoEndQuarter() {
         winningSquareId: squareId,
         winnerLabel: square?.ownerLabel ?? null,
         settledAt: new Date().toISOString(),
+        quarterLadder: [],
       },
     ],
   }
