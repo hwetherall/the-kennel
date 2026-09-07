@@ -48,7 +48,12 @@ export function useLiveSnapshot(playerToken?: string | null) {
   }, [refresh])
 
   useEffect(() => {
-    if (!backendConfigured || !insforge) return subscribeDemo(() => void refresh())
+    if (!backendConfigured) return subscribeDemo(() => void refresh())
+    if (!insforge) {
+      setRealtimeOnline(true)
+      const interval = window.setInterval(() => void refresh(), 4_000)
+      return () => window.clearInterval(interval)
+    }
     const realtime = insforge.realtime
 
     let active = true
@@ -117,7 +122,11 @@ export function useLiveHostSnapshot(hostToken?: string | null) {
 
   useEffect(() => {
     if (!hostToken) return
-    if (!backendConfigured || !insforge) return subscribeDemo(() => void refresh())
+    if (!backendConfigured) return subscribeDemo(() => void refresh())
+    if (!insforge) {
+      const interval = window.setInterval(() => void refresh(), 4_000)
+      return () => window.clearInterval(interval)
+    }
     const realtime = insforge.realtime
     const onChanged = () => void refresh()
     LIVE_EVENTS.forEach((event) => realtime.on(event, onChanged))

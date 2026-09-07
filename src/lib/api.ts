@@ -24,11 +24,16 @@ const baseUrl = import.meta.env.VITE_INSFORGE_URL
 const anonKey = import.meta.env.VITE_INSFORGE_ANON_KEY
 const demoMode = import.meta.env.VITE_DEMO_MODE === 'true'
 
-export const backendConfigured = !demoMode && Boolean(baseUrl && anonKey)
+export const backendConfigured = !demoMode && Boolean(baseUrl)
 
-export const insforge = backendConfigured
+export const insforge = backendConfigured && anonKey
   ? createClient({ baseUrl: baseUrl!, anonKey: anonKey! })
   : null
+
+function publicFunctionUrl() {
+  const appKey = new URL(baseUrl!).hostname.split('.')[0]
+  return `https://${appKey}.function2.insforge.app/kennel-api`
+}
 
 interface InvokeOptions {
   playerToken?: string
@@ -37,17 +42,37 @@ interface InvokeOptions {
 }
 
 async function invoke<T>(action: string, payload = {}, options: InvokeOptions = {}) {
-  if (!insforge) throw new Error('Backend is not configured')
+  if (!backendConfigured) throw new Error('Backend is not configured')
 
   const headers: Record<string, string> = {}
   if (options.playerToken) headers['X-Player-Token'] = options.playerToken
   if (options.hostToken) headers['X-Host-Token'] = options.hostToken
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey
 
-  const { data, error } = await insforge.functions.invoke('kennel-api', {
-    body: { action, ...payload },
-    headers,
-  })
+  let data: unknown
+  let error: { message?: string } | null = null
+
+  if (insforge) {
+    const response = await insforge.functions.invoke('kennel-api', {
+      body: { action, ...payload },
+      headers,
+    })
+    data = response.data
+    error = response.error
+  } else {
+    const response = await fetch(publicFunctionUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify({ action, ...payload }),
+    })
+    data = await response.json().catch(() => null)
+    if (!response.ok) {
+      const message = data && typeof data === 'object' && 'error' in data
+        ? String(data.error)
+        : `The Kennel server returned ${response.status}`
+      error = { message }
+    }
+  }
 
   if (error) throw new Error(error.message || 'The Kennel could not reach the server')
   const response = data as { data?: T; error?: string } | T
