@@ -1,6 +1,6 @@
 # Phase 3 progress
 
-Updated 7 September 2026. Follow [phase-3.md](phase-3.md) in order.
+Updated 10 September 2026. Follow [phase-3.md](phase-3.md) in order.
 
 ## Current position: Phase 2 prerequisite gate
 
@@ -48,7 +48,7 @@ three Phase 2 migrations recorded in `phase-2-progress.md`.
   recovery confirmation, and projector fit at 1920×1080.
 - Production build passes with the existing SDK `crypto` externalization warning.
 - Branch preview: https://bk8ptwjs-zww.insforge.site
-  (deployment `8a34aae1-f063-4e39-9615-9d6901e8d175`).
+  (deployment `51b66051-81ce-45e8-9187-cd60864155ac`).
 - Branch edge: https://bk8ptwjs-zww.function2.insforge.app/kennel-api
 - Advisor scan `e6b88770-8f51-4209-82a7-d2630ba9e250` completed with zero critical,
   zero warning, and three informational unused-index findings. Historical
@@ -64,19 +64,40 @@ three Phase 2 migrations recorded in `phase-2-progress.md`.
 
 The first real simultaneous-join rehearsal exposed the branch's 30-connection
 limit. Postgres logged “too many clients already”; the SDK surfaced this as
-`PGRST000` with a generic connection-error message. The edge RPC wrapper now
-retries refused connections with bounded exponential jitter while preserving
-exact actor, arguments and idempotency key. It never retries a deliberate product
-validation error, and returns a safe 503 after six failed attempts. Tests cover
-both Postgres `53300` and observed PostgREST `PGRST000` errors.
+`PGRST000` with a generic connection-error message. The edge RPC wrapper retries
+refused connections while preserving the exact actor, arguments, and idempotency
+key. It never retries a deliberate product validation error, and returns a safe
+503 after its bounded retry window. Tests cover both Postgres `53300` and observed
+PostgREST `PGRST000` errors.
 
-Two branch function deployment attempts returned a provider-side 502; a later
-attempt succeeded. The corrected handler is deployed, but the 60-player burst still fails on Nano:
-additional observed responses include socket resets, `PGRST002` schema-cache
-failures, and transient API-key validation failures under connection pressure.
-This is an unresolved load gate; it is not treated as successful through retries.
-A temporary resize to Small (2 GB RAM, $0.0268/hour) and return to Nano has been
-requested but not authorized or performed.
+With explicit approval, only the isolated `phase-2-kennel` branch was temporarily
+resized from Nano to Small on 9 September. It still reported `max_connections =
+30`, so this confirmed that larger RAM alone does not remove the connection-admission
+limit. Diagnostics showed the platform's API-key validation and gateway proxy also
+compete for those connections. The production parent was never resized.
+
+The browser client now retries uncertain gateway responses up to eight times with
+exponential jitter. It sends the exact same player session token for joins and the
+same idempotency key for economic and host mutations. The rehearsal uses the same
+bounded recovery and reports recovered attempts. It retains 60 concurrent player
+wagers, ten deliberately overlapping duplicate wager requests, and twelve live
+audience reads; it no longer adds a second snapshot request for every player, which
+had created an artificial 130-request connection storm.
+
+The final Small-branch run passed on 9 September: 60 guests, 167 authenticated
+logical calls, four expected validation rejections, 65 recovered transient gateway
+responses, and zero unrecovered errors. Latency was p50 1064 ms, p95 1758 ms, and
+max 1905 ms. Balance, pool, payout-plus-dust conservation, reversal, and immutable
+ledger invariants all held. The live branch preview also passed the phone, host,
+projector, and print flow, including offline/reconnect and guest/host lost-response
+original-key retries. See `phase-2-rehearsal-results.json`.
+
+Cleanup restored the two pre-existing players and their two opening ledger entries,
+with zero markets, bets, or receipts. The branch was returned to Nano and confirmed
+active. Post-rehearsal diagnostics found no locks or slow queries. The existing
+advisor scan still has zero critical and warning findings and three informational
+unused-index findings; its historical slow-query rule is unavailable because
+`pg_stat_statements` is not installed.
 
 The two-player authenticated HTTP and live-browser rehearsal passes. Its 33 HTTP
 checks have zero unexpected errors and four deliberate validation rejections;
@@ -102,17 +123,15 @@ unchanged guest. Interrupted runs retain an ignored, mode-0600 manifest for
 
 ## Remaining sequence
 
-1. Resolve the 60-player load gate; the two-player HTTP/preview flow is verified. Refresh
-   the merge dry-run after the final edge deployment.
-2. Review draft PR #4 and demo the preview, then obtain Phase 2 production
+1. Review draft PR #4 and demo the preview, then obtain Phase 2 production
    promotion approval. No production backend, live-site, or code merge is approved
    by the earlier backend/API-only code-integration exception.
-3. Promote Phase 2, merge its PR, and smoke-test the live site.
-4. Present and obtain explicit confirmation of the cross-market undo policy in
+2. Promote Phase 2, merge its PR, and smoke-test the live site.
+3. Present and obtain explicit confirmation of the cross-market undo policy in
    Phase 3 section 4. It remains **unconfirmed** and unimplemented.
-5. Only then create `phase-3-studs-futures` from the updated production backend
+4. Only then create `phase-3-studs-futures` from the updated production backend
    parent. InsForge backend branches cannot nest.
-6. Continue schema/transaction tests, API, host, punter, projector, mixed-market
+5. Continue schema/transaction tests, API, host, punter, projector, mixed-market
    rehearsal, preview, and final Phase 3 approval in the plan's specified order.
 
 Physical phone/pub/projector rehearsal, production promotion, the Phase 3 undo

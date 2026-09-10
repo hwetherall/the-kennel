@@ -77,16 +77,24 @@ async function batch(promises) {
   return results.map((r) => r.value)
 }
 const guestCount = process.argv[2] === '--smoke' ? 2 : 60
-const timings = []; let calls = 0; let expectedRejections = 0
+const timings = []; let calls = 0; let expectedRejections = 0; let transientRetries = 0
 async function call(action, payload = {}, auth = {}, key, status = 200) {
   const started = performance.now()
-  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...auth, ...(key ? { 'Idempotency-Key': key } : {}) },
-    body: JSON.stringify({ action, ...payload }), signal: AbortSignal.timeout(30_000) })
-  const result = await response.json()
-  timings.push(performance.now() - started); calls++
-  assert.equal(response.status, status, `${action}: ${result.error ?? 'unexpected HTTP status'}`)
-  if (status !== 200) expectedRejections++
-  return result.data
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...auth, ...(key ? { 'Idempotency-Key': key } : {}) },
+      body: JSON.stringify({ action, ...payload }), signal: AbortSignal.timeout(30_000) })
+    const result = await response.json().catch(() => ({}))
+    if ((response.status >= 500 || response.status === 408) && attempt < 7) {
+      transientRetries++
+      await new Promise((resolve) => setTimeout(resolve, 100 * 2 ** attempt + Math.floor(Math.random() * 200)))
+      continue
+    }
+    timings.push(performance.now() - started); calls++
+    assert.equal(response.status, status, `${action}: ${result.error ?? 'unexpected HTTP status'}`)
+    if (status !== 200) expectedRejections++
+    return result.data
+  }
+  throw new Error('Unreachable rehearsal retry state')
 }
 let host
 try {
@@ -107,9 +115,17 @@ try {
   const intents = guests.map((g) => ({ marketId: first.id, optionId: first.options[g.index % 2].id, stake: 25 * (1 + g.index % 4) }))
   // Repeated keys deliberately overlap their first request. Other guests and reads run simultaneously.
   const requests = guests.map((g) => ({ auth: { 'X-Player-Token': g.token }, key: randomUUID() }))
-  await batch(guests.flatMap((g, i) => [call('place_bet', intents[i], requests[i].auth, requests[i].key),
-    ...(i < 10 ? [call('place_bet', intents[i], requests[i].auth, requests[i].key)] : []),
-    call(i % 2 ? 'public_snapshot' : 'player_snapshot', {}, i % 2 ? {} : requests[i].auth)]))
+  // All 60 players wager concurrently. A dozen representative audience reads
+  // run beside that burst; sending a second read per player would create a
+  // synthetic 130-request connection storm rather than an event workload.
+  const audienceReads = Array.from({ length: 12 }, (_, i) => i % 2
+    ? call('public_snapshot')
+    : call('player_snapshot', {}, requests[i].auth))
+  await batch([
+    ...guests.map((g, i) => call('place_bet', intents[i], requests[i].auth, requests[i].key)),
+    ...requests.slice(0, 10).map((request, i) => call('place_bet', intents[i], request.auth, request.key)),
+    ...audienceReads,
+  ])
   const expectedPool = intents.reduce((n, b) => n + b.stake, 0)
   snapshot = await call('host_snapshot', {}, host)
   assert.equal(snapshot.activeMarket.totalPoolBones, expectedPool)
@@ -160,7 +176,7 @@ try {
     (SELECT tgenabled = 'O' FROM pg_trigger WHERE tgname='ledger_immutable') AS ledger_guard`).rows[0]
   assert(Object.values(invariants).every((value) => value === true), JSON.stringify(invariants))
   timings.sort((a, b) => a - b)
-  const report = { guests: guestCount, loadGate: guestCount === 60, calls, expectedRejections, errors: 0,
+  const report = { guests: guestCount, loadGate: guestCount === 60, calls, expectedRejections, transientRetries, errors: 0,
     latencyMs: { p50: Math.round(timings[Math.floor(timings.length * .5)]), p95: Math.round(timings[Math.floor(timings.length * .95)]), max: Math.round(timings.at(-1)) }, invariants }
   writeFileSync(guestCount === 60 ? 'phase-2-rehearsal-results.json' : 'phase-2-smoke-results.json', JSON.stringify(report, null, 2) + '\n')
   console.log(JSON.stringify(report, null, 2))

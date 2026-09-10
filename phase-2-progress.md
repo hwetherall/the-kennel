@@ -1,6 +1,6 @@
 # Phase 2 implementation progress
 
-Updated 7 September 2026. The product contract and acceptance criteria remain in [phase-2.md](phase-2.md).
+Updated 10 September 2026. The product contract and acceptance criteria remain in [phase-2.md](phase-2.md).
 
 ## Isolation
 
@@ -83,7 +83,8 @@ This increment is approved for code integration. Phase 2 remains incomplete and 
 ## Prerequisite completion work on the Phase 3 handoff branch
 
 The remaining Phase 2 interface, resilience, demo, and rehearsal work is being
-completed before any Phase 3 feature. See [phase-3-progress.md](phase-3-progress.md)
-for the current verification record, branch preview, discovered connection limit,
-and approval boundary. The backend remains isolated on `phase-2-kennel`; no
-production promotion has occurred.
+completed before any Phase 3 feature. The guarded real-HTTP 60-player rehearsal
+now passes after same-identity transient gateway retries; its exact report and
+cleanup evidence are in [phase-3-progress.md](phase-3-progress.md) and
+`phase-2-rehearsal-results.json`. The backend remains isolated on
+`phase-2-kennel`; no production promotion has occurred.

@@ -42,6 +42,13 @@ export class ApiError extends Error {
   constructor(message: string, public readonly uncertain: boolean) { super(message) }
 }
 
+const transientAttempts = 8
+
+function waitForRetry(attempt: number) {
+  const delay = 100 * 2 ** attempt + Math.floor(Math.random() * 200)
+  return new Promise((resolve) => setTimeout(resolve, delay))
+}
+
 interface InvokeOptions {
   playerToken?: string
   hostToken?: string
@@ -96,14 +103,21 @@ async function invokeRaw<T>(action: string, payload = {}, options: InvokeOptions
 async function invoke<T>(action: string, payload = {}, options: InvokeOptions = {}) {
   const storageKey = options.hostToken && options.idempotencyKey ? `kennel-pending-host:${options.hostToken}` : null
   if (storageKey) sessionStorage.setItem(storageKey, JSON.stringify({ action, payload, key: options.idempotencyKey }))
-  try {
-    const result = await invokeRaw<T>(action, payload, options)
-    if (storageKey) sessionStorage.removeItem(storageKey)
-    return result
-  } catch (error) {
-    if (storageKey && error instanceof ApiError && !error.uncertain) sessionStorage.removeItem(storageKey)
-    throw error
+  for (let attempt = 0; attempt < transientAttempts; attempt += 1) {
+    try {
+      const result = await invokeRaw<T>(action, payload, options)
+      if (storageKey) sessionStorage.removeItem(storageKey)
+      return result
+    } catch (error) {
+      if (error instanceof ApiError && error.uncertain && attempt + 1 < transientAttempts) {
+        await waitForRetry(attempt)
+        continue
+      }
+      if (storageKey && error instanceof ApiError && !error.uncertain) sessionStorage.removeItem(storageKey)
+      throw error
+    }
   }
+  throw new Error('Unreachable retry state')
 }
 
 export function pendingHostMutation(hostToken?: string) {
