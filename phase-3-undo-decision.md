@@ -1,96 +1,143 @@
-# Decision needed: undoing a goal whose payout was spent in a concurrent market
+# Resolution of phase-3.md section 4: goal payouts and concurrent markets
 
-Prepared 10 September 2026. This is the decision required by
-[phase-3.md](phase-3.md) section 4 and delivery step 3. **No Phase 3 market
-code should be written until it is answered**, because both Studs v Spuds and
-Futures create markets that are open at the same time as a Next Goal market.
+Prepared 10 September 2026, revised the same day after Harry corrected the Studs
+v Spuds timing model. This resolves the decision required by
+[phase-3.md](phase-3.md) section 4 and delivery step 3.
 
-## Why Phase 2 does not have this problem
+**Outcome: the section 4 problem is unreachable, and no cross-market undo policy
+is needed.** What is needed instead is one database-level invariant, described
+below. Section 4 was written on an incorrect model of when Studs markets are
+open, and so was the memo that first proposed a policy for it.
 
-`kennel_undo_latest_score` (migrations/20260907111154_phase-2-recovery-undo.sql)
-takes the shared game lock, then walks **later Next Goal markets in the same
-quarter, newest first**, reversing each settlement and voiding it — and only
-then reverses the payout made by the goal being undone. By the time the funding
-payout is reversed, every Bone that payout could have been spent on has already
-been refunded.
+## The corrected Studs v Spuds model
 
-That ordering is load-bearing, not incidental. `ledger.balance_after` carries
-`CHECK (balance_after >= 0)` (migrations/20260907102055_phase-2-kennel.sql:88),
-and `kennel_write_ledger` writes a ledger row for every mutation. So a reversal
-that would take a balance below zero does not produce a negative balance — it
-raises a constraint violation and **aborts the entire undo transaction**.
+Studs v Spuds asks which of two athletes will have more possessions **in the
+coming quarter**. It is a break game, not an in-play game:
 
-## What breaks in Phase 3
+- It opens **during the break before** the quarter it covers, and pre-match for
+  the Q1 matchups.
+- It **locks at that quarter's opening bounce** and stays closed for the whole
+  quarter.
+- At the siren it is reconciled and paid out, and the next quarter's matchups
+  open for the break.
 
-A Studs market opens at the start of a quarter and stays open for five minutes,
-overlapping several Next Goal markets. Its `sequence` is lower than the Next
-Goal markets that follow, and its `type` is not `next_goal`, so the undo loop's
-`type = 'next_goal' AND sequence >= …` filter never touches it.
+So Studs resets every quarter, and a quarter may carry more than one matchup.
+Next Goal is the continuous in-play game, resetting on every goal.
 
-1. A goal pays a guest 1,500 Bones.
-2. The guest stakes those Bones on the already-open Studs market.
-3. The host mis-tapped, and undoes the goal.
-4. The loop refunds later Next Goal markets, but not the Studs stake.
-5. Reversing the goal's payout drives that guest's `balance_after` negative.
-6. The `CHECK` fires. **The undo fails and the host cannot correct the score.**
+Section 4, phase-3.md section 5 ("Set `locks_at` from the authoritative
+quarter-start instant plus five minutes"), and [claude.md](claude.md) section 7
+("Opens at the start of the quarter, locks five minutes in") all describe a
+market that is open *during* play for the first five minutes of a quarter. That
+is what created the overlap with Next Goal. It is not the game.
 
-This happens even though Studs has never settled, so restricting Studs
-settlement until the siren does not help. The observable consequence is not a
-corrupted balance; it is a host who cannot fix a mis-tap at 1am, which
-[claude.md](claude.md) section 9 names as a guaranteed event.
+The two games never compete for attention, which is a better product than the
+overlap: Next Goal fills the play, Studs fills the break.
 
-## Option A — void and refund the affected market (recommended)
+## Why the section 4 scenario cannot occur
 
-When undo finds stakes placed in an unresolved market after the goal's ledger
-checkpoint, void and refund **that whole market** before reversing the goal's
-payout. Earlier unaffected markets stay intact.
+Section 4's scenario needs a goal payout to be spent in a market that is open at
+the time of the goal. Four guards in the applied Phase 2 schema close that off.
 
-- Record a ledger sequence checkpoint on each goal, after its settlement and
-  before the mutation returns, so "after the goal" is a server fact and not a
-  client timestamp.
-- Extend the existing newest-first loop to include unresolved markets of any
-  type in that quarter holding post-checkpoint stakes. Reuse
-  `kennel_finish_market(id, NULL, reason, request)` — the same void-and-refund
-  primitive the loop already calls. One transaction, same lock order.
-- Do not reopen the market or extend its deadline.
-- The undo confirmation tells the host which predictions will be refunded;
-  guests see the refund reason.
+1. **Score events only exist during live play.** `kennel_record_score` refuses
+   unless `period_status = 'live'` (migrations/20260907102055_phase-2-kennel.sql,
+   `record_score` guard).
+2. **Score undo only reaches into an unsealed quarter.**
+   `kennel_undo_latest_score` refuses when `quarter_results` already holds a row
+   for the latest score event's quarter, and `kennel_end_quarter` writes that row
+   at the siren (same file, line 808). Undo can never reach back past a siren.
+3. **Locked markets accept nothing.** `kennel_place_bet` raises `Market has
+   locked` unless `status = 'open'` (line 281). A Studs market locked at the
+   bounce cannot take a stake for the rest of the quarter.
+4. **Nothing else is open during play.** Studs for the live quarter is locked at
+   the bounce; Studs for the next quarter has not opened yet; both Futures locked
+   at first bounce.
 
-**Cost:** guests who staked on Studs *before* the goal also get refunded, for a
-mis-tap that had nothing to do with them. Blast radius is one market, one
-quarter, and the checkpoint keeps markets with no post-goal stakes untouched.
+So during any live, unsealed quarter — the only window in which a goal payout
+can be reversed — **the only market that can accept a stake is Next Goal**. That
+is precisely the case the Phase 2 undo loop already walks, newest first, before
+reversing the funding payout.
 
-**Benefit:** no new accounting concepts. Undo keeps working in every case. It
-reuses the settled Phase 2 ordering rule rather than inventing a second one.
+No ledger checkpoint, no cross-type undo loop, and no extra migration for this.
 
-## Option B — cancel only the affected guests' bets
+## What must be enforced instead
 
-Refund just the bets that consumed the payout, decrement the pool, and leave the
-market open.
+The above depends on an invariant that is currently a convention, not a rule:
 
-**Cost:** needs a stake-reversal mechanism that does not exist yet, plus
-selection semantics for cases the ledger cannot answer on its own — a guest who
-staked partly from their own Bones and partly from the payout, or who increased
-an existing position, holds one `bets` row with a `UNIQUE (market_id,
-player_id)` constraint and two stake ledger rows. It also means a live pool that
-moves for reasons no guest on the projector can see, mid-market. phase-3.md
-section 4 requires this to be designed and audited separately before any code.
+> No market other than Next Goal is ever `open` while `period_status = 'live'`.
 
-**Benefit:** unaffected guests keep their positions.
+That belongs in the database, in the spirit of the `UNIQUE (market_id,
+player_id)` constraint that makes hedging impossible. Concretely, and folding in
+the lock-strategy work phase-3.md section 8 already calls for:
 
-## Not on the table
+- Give markets a `lock_strategy` of `'deadline'` (Next Goal: a 90-second
+  `locks_at`) or `'bounce'` (Studs and both Futures: locked by a game
+  transition). `locks_at` becomes nullable for bounce-locked markets, rather than
+  carrying an invented far-future date.
+- `kennel_start_quarter` locks every `open` bounce-locked market in the same
+  transaction that sets `period_status = 'live'`, under the existing game lock.
+- `kennel_place_bet` rejects a bounce-locked market whenever `period_status =
+  'live'`, so a stale `open` row can never accept a stake.
+- Refuse to open a bounce-locked market while `period_status = 'live'`, so a host
+  mis-tap cannot recreate the overlap that section 4 feared.
 
-Refusing the undo, or relaxing the non-negative balance guard. phase-3.md
-section 4 rules both out explicitly, and the second would break the ledger audit
-trail that every other invariant is checked against.
+Studs and Futures then share one lock rule, tested once.
 
-## The question
+## The residual risk, which is a different problem
 
-**Confirm Option A, or ask for Option B to be designed first.** Option A is
-roughly a migration plus tests on the existing loop. Option B is a new
-subsystem, and section 4 requires its design to be approved before it is coded.
+Reversing an **already-paid Studs settlement** hits the same
+`ledger.balance_after CHECK (balance_after >= 0)` wall (line 88): the reversal
+raises a constraint violation and aborts, rather than producing a negative
+balance.
 
-Once answered, record the choice here and in `phase-3-progress.md`, then the
-tests named in phase-3.md section 10 can be written: pre-goal stakes,
-post-goal increases, replayed idempotency keys, and later Next Goal spending of
-the resulting refunds.
+The path is real but narrow. In a break: Studs for the quarter just finished
+settles and pays out, the next quarter's matchups are open in that same break, a
+guest stakes the payout, and only then does the host find the disposal numbers
+were wrong and want to correct them downward.
+
+This is structurally the old problem with a different trigger, and the trigger is
+what changed the stakes:
+
+| | Trigger | Frequency |
+|---|---|---|
+| Section 4 as written | host mis-taps a score | guaranteed, per claude.md section 9 |
+| Actual residual risk | mis-typed disposal number, found after explicit confirmation | rare, and preview-guarded |
+
+Score undo — the guaranteed event — is off this path entirely.
+
+**Recommendation: defer it, as phase-3.md section 5 already does** ("Any later
+request to correct an already-paid result requires a separate audited recovery
+design"). Deferral is safe because the mitigations are already in the plan and
+cost nothing extra:
+
+- Ending totals stay an editable draft, mutating no ledger, until explicit
+  confirmation.
+- A mandatory server-derived preview shows baselines, cumulative totals, quarter
+  deltas, the selected winner or tie, pools, and the expected settlement audit
+  before any Bones move.
+- An explicit "Void and refund" path for missing or unresolvable stats, so the
+  host is never pushed into guessing a number to get past the screen.
+
+Ordering the break so that the previous quarter's Studs results are finalized
+before the next quarter's matchups open would narrow the window further, but it
+cannot close it — once the next markets are open the exposure returns — and it
+would put disposal lookup back on the critical path, which phase-3.md section 6
+deliberately keeps it off. Not worth the trade.
+
+Fully eliminating it needs a real audited stake-reversal mechanism. For a
+three-hour single-night app, a wrong number discovered after payout is
+proportionately a manual host fix, not a subsystem.
+
+## Consequences for the plan
+
+- Phase 3 is **no longer blocked on a design decision**. The only remaining gate
+  ahead of it is Phase 2's production promotion.
+- phase-3.md section 4 is resolved by this analysis rather than by a policy
+  choice. Its acceptance-gate line — "The new cross-market undo rule is
+  explicitly confirmed, implemented, and verified" — is satisfied by the
+  invariant above plus its tests.
+- The section 10 tests change accordingly. Drop the cross-market goal-payout
+  spending cases. Add: a bounce-locked market cannot be opened or staked during
+  live play; `start_quarter` locks every bounce-locked market atomically; the
+  five existing goal-undo scenarios still pass unchanged.
+- These documents still carry the wrong Studs timing and need correcting:
+  claude.md section 7, phase-3.md sections 4, 5, 6, 8, and 10.

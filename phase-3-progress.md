@@ -144,9 +144,16 @@ unchanged guest. Interrupted runs retain an ignored, mode-0600 manifest for
    backend, live-site, or code merge is approved by the earlier
    backend/API-only code-integration exception.
 2. Promote Phase 2, merge its PR, and smoke-test the live site.
-3. Confirm the cross-market undo policy in Phase 3 section 4. The concrete
-   proposal is written up in `phase-3-undo-decision.md`; Harry's answer remains
-   **unconfirmed** and the policy is unimplemented.
+3. Phase 3 section 4 is **resolved** in `phase-3-undo-decision.md`, and needs no
+   policy decision. Harry corrected the Studs v Spuds timing on 10 September:
+   Studs is a break game, open during the break before the quarter it covers,
+   locked at that quarter's bounce, and reconciled at the siren. It is never open
+   during play, so a goal payout can only ever be spent on a Next Goal market,
+   which the existing Phase 2 undo loop already unwinds. What replaces the policy
+   is a database-level invariant: no market other than Next Goal is ever `open`
+   while `period_status = 'live'`. The residual risk of reversing an already-paid
+   Studs settlement stays deferred per section 5, mitigated by the draft/preview/
+   confirm sequence.
 4. Only then create `phase-3-studs-futures` from the updated production backend
    parent. InsForge backend branches cannot nest.
 5. Continue schema/transaction tests, API, host, punter, projector, mixed-market
