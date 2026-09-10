@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs'
 const project = JSON.parse(readFileSync('.insforge/project.json', 'utf8'))
 const { data: branches } = JSON.parse(execFileSync('npx', ['-y', '@insforge/cli', 'branch', 'list', '--json'], { encoding: 'utf8' }))
 const branch = branches.find((entry) => entry.id === project.project_id)
-assert(branch?.name === 'phase-2-kennel' && branch.branch_state === 'ready', 'Use the ready phase-2-kennel branch')
+assert(branch?.branch_state === 'ready', 'Switch to a ready development backend branch')
 assert(branch.parent_project_id && branch.parent_project_id !== branch.id && branch.appkey !== 'bk8ptwjs', 'Refusing production')
 assert.equal(project.oss_host, `https://${branch.appkey}.${branch.region}.insforge.app`)
 const url = `https://${branch.appkey}.function2.insforge.app/kennel-api`

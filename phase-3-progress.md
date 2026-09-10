@@ -58,6 +58,78 @@ placeholder "Home"/"Away", and the Zeffy import has not been run.
 `.env.local` still points at the `phase-2-kennel` branch, not production, which
 keeps every local script and dev server off the production project.
 
+## Development backend: `phase-3-studs-futures`
+
+Created 10 September 2026 from the Phase 2 production parent.
+
+- Branch project `5646765f-bcf4-48e7-a22f-0699ce4bd662`, app key `bk8ptwjs-yw5`,
+  schema-only, `ready`.
+- API base <https://bk8ptwjs-yw5.us-west.insforge.app>.
+- Edge <https://bk8ptwjs-yw5.function2.insforge.app/kennel-api>.
+- Its T0 is the Phase 2 parent, so `branch reset` returns a pristine Phase 2
+  base without spending another slot.
+
+**Branch slots are capped at 2 per parent.** Both were occupied by merged
+branches, so `branch create` failed with `Per-parent quota: max 2 branches per
+parent`. `branch reset` could not substitute, because reset restores a branch's
+original dump and `phase-2-kennel` was created from a Phase 1 parent. Harry
+chose to delete `phase-1-squares`: its schema is merged into the parent, all five
+migrations are in git, and its data was synthetic. Two parent restore points
+were taken first — manual `adfde23d-73af-4028-9110-47633fc5ec0f`
+(`post-phase-2-promotion`) and the scheduled pre-merge
+`e4d1631d-d93f-4508-a8f1-ce85ccf16f53`. `phase-2-kennel` is retained.
+
+Setup applied: `kennel-api` deployed to the branch, because `pg_dump` copies
+`functions.definitions` rows but not the Deno Subhosting bundle; event, grid,
+game and the 100 squares seeded; `.env.local` repointed at the branch.
+
+Verified on the branch: `verify-phase-two.mjs`, `verify-phase-two.mjs
+--undo-recovery` and `verify-phase-two-edge.mjs` (17 read-only checks) all pass,
+plus 64 unit tests and the production build.
+
+Four scripts hard-coded the branch name `phase-2-kennel` and refused to run
+anywhere else, and `rehearse-phase-two.mjs` hard-coded the retired
+`bk8ptwjs-zww` preview URL. All five are now generic: the guards keep requiring
+a `ready` schema-only branch with a real parent and still refuse app key
+`bk8ptwjs`, and the rehearsal derives its preview URL from the linked branch.
+
+### Outstanding, needs Harry
+
+The sandbox classifier blocks this session from writing secrets to files or
+passing environment values into a deploy, so these are his to run:
+
+1. `npx -y @insforge/cli secrets add HOST_PIN <pin>` — the host console cannot
+   authenticate without it. `HOST_PIN` is a per-project backend secret read by
+   the edge function, and it does not come across with a branch.
+2. `npx -y @insforge/cli deployments env set VITE_INSFORGE_URL https://bk8ptwjs-yw5.us-west.insforge.app`
+   then `npx -y @insforge/cli deployments deploy .` — the branch has no preview
+   site yet, which the dress rehearsal needs so guests can join from phones.
+3. Optional: read `ANON_KEY` and set it as `VITE_INSFORGE_ANON_KEY` on the
+   deployment. Without it the client falls back to polling only. That is
+   functional, but production has realtime, so a rehearsal without it is not
+   testing the same thing.
+
+## Planned dress rehearsal on a real finals match
+
+Harry's decision on 10 September: rehearse against a real match rather than
+synthetic data, prioritising the **Semi Finals**. If the 2026 finals follow the
+usual four-week structure back from the 26 September Grand Final, those fall
+around 11-12 September, so within days. Confirm against the actual fixture.
+
+Phase 2 is already live and is the whole risky core — squares board, host score
+entry, the Next Goal cycle, the ladder — so it can be rehearsed now. Phase 3
+will not exist by the Semi Finals and is not needed for it.
+
+Run the rehearsal on the **branch preview, never production**, so its guests,
+stakes and payouts do not land permanently in production's append-only ledger.
+Phase 3 migrations should land only after the rehearsal, so the rehearsal
+exercises exactly the code on `main` and in production.
+
+Also needed before a rehearsal: the real team names set in the host console, and
+a shuffled grid. The setup script seeds `grid_config` with digits in natural
+`0`-`9` order, which makes the live square trivially predictable; the console has
+a shuffle control.
+
 ## Superseded: the Phase 2 prerequisite gate
 
 Prerequisite PR: https://github.com/hwetherall/the-kennel/pull/4

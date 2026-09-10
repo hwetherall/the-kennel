@@ -1,5 +1,6 @@
 // Seed only the isolated Phase 2 backend, then switch local frontend configuration.
-// Run after `insforge branch create phase-2-kennel --mode schema-only`.
+// Run after `insforge branch create <name> --mode schema-only`. Any schema-only
+// branch of the parent is accepted; the production project is always refused.
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -8,8 +9,8 @@ const cli = (...args) => execFileSync('npx', ['-y', '@insforge/cli', ...args], {
 const project = JSON.parse(readFileSync('.insforge/project.json', 'utf8'))
 const { data: branches } = JSON.parse(cli('branch', 'list', '--json'))
 const branch = branches.find((entry) => entry.id === project.project_id)
-assert(branch?.name === 'phase-2-kennel', 'Switch to phase-2-kennel before running setup')
-assert(branch.branch_state === 'ready', 'Phase 2 backend must be ready')
+assert(branch, 'Switch to the development backend branch before running setup')
+assert(branch.branch_state === 'ready', 'The development backend must be ready')
 assert(branch.branch_metadata.mode === 'schema-only', 'Expected a schema-only branch')
 assert(branch.parent_project_id && branch.parent_project_id !== branch.id, 'Refusing a production parent')
 const branchUrl = `https://${branch.appkey}.${branch.region}.insforge.app`

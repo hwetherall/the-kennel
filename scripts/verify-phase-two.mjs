@@ -8,7 +8,7 @@ const recovery = process.argv.includes('--undo-recovery')
 assert(process.argv.slice(2).every((arg) => arg === '--undo-recovery'), 'Unknown verification argument')
 const { data: branches } = JSON.parse(execFileSync('npx', ['-y', '@insforge/cli', 'branch', 'list', '--json'], { encoding: 'utf8' }))
 const branch = branches.find((entry) => entry.id === project.project_id)
-assert(branch?.name === 'phase-2-kennel' && branch.branch_state === 'ready', 'Use the ready phase-2-kennel backend branch')
+assert(branch?.branch_state === 'ready', 'Switch to a ready development backend branch')
 assert(branch.parent_project_id && branch.parent_project_id !== branch.id && branch.appkey !== 'bk8ptwjs', 'Refusing production')
 assert.equal(project.oss_host, `https://${branch.appkey}.${branch.region}.insforge.app`)
 const sqlFile = recovery ? 'tests/backend/phase-two-undo-recovery.sql' : 'tests/backend/phase-two.sql'
