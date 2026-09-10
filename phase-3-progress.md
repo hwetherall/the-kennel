@@ -2,7 +2,63 @@
 
 Updated 10 September 2026. Follow [phase-3.md](phase-3.md) in order.
 
-## Current position: Phase 2 prerequisite gate
+## Current position: Phase 2 promoted; Phase 3 not started
+
+**Phase 2 shipped to production on 10 September 2026.** Harry approved the full
+promotion sequence without a prior hands-on demo, on the recorded evidence plus
+the re-verification below. Actual identifiers:
+
+- Code: PR #4 merged as `e867c8b` on `main`.
+- Backend: `branch merge phase-2-kennel` applied 23 additions and 13
+  modifications with zero conflicts. The branch is now in `merged` state. The
+  `kennel-api` edge function was promoted **by the merge itself**, as a
+  `[DATA] edge_function` row, so it needed no separate `functions deploy`.
+- Production site: **first ever deployment**, live at
+  <https://bk8ptwjs.insforge.site>, deployment `d1fff339-6c79-4bb8-8f81-3846bf39a849`.
+  Before this the URL returned Vercel `DEPLOYMENT_NOT_FOUND`; Phase 1 had only
+  ever been demoed on its own branch preview.
+- Production edge: <https://bk8ptwjs.function2.insforge.app/kennel-api>.
+- Production API base: <https://bk8ptwjs.us-west.insforge.app>.
+
+Verified on the production project after the merge:
+
+- Tables `markets`, `market_options`, `bets`, `ledger` present; 29 `kennel_*`
+  functions; RLS on all four economic tables with the `client access denied`
+  policies in place.
+- The three table diffs the merge preview reported as "not auto-applied" did
+  land, through the migration records that run first: `players` +
+  `courtesy_granted_at`/`bonus_squares_granted`, `score_events` +
+  `settled_market_id`/`opened_market_id`, `quarter_results` + `quarter_ladder`.
+- `mutation_receipts_pkey` is `PRIMARY KEY (action, idempotency_key,
+  actor_fingerprint)`, so idempotency is scoped per action and actor.
+- `ledger_immutable` trigger on `kennel_guard_ledger` is active.
+- `public_snapshot` over the production edge returns 100 squares, `pre_match`,
+  quarter 1, version 1.
+- The deployed bundle is built against `https://bk8ptwjs.us-west.insforge.app`,
+  not the branch, and the dead-code-eliminated local-demo branch confirms
+  `VITE_INSFORGE_URL` was present at build time. `VITE_INSFORGE_URL` and
+  `VITE_INSFORGE_ANON_KEY` are set as persistent deployment env vars.
+- Read-only live browser smoke, five checks, no page errors: punter at 390px
+  renders 100 squares and 10 row headers against the live backend; no horizontal
+  overflow at 360px; `/screen` fits 1920×1080 with zero vertical overflow;
+  `/host/print` renders 100 squares; `/host` presents its PIN gate.
+- Advisor rescan on the branch before promotion: 0 critical, 0 warning, 7
+  informational unused-index findings. Note this is 7, not the 3 recorded
+  earlier. `pg_stat_statements` is still unavailable, so the historical
+  slow-query rule did not run.
+
+**Production data is pristine and deliberately untouched: 0 players, 0 ledger
+rows, 0 markets, 0 score events, 0 purchases, 0 sold squares, 0 quarter
+results.** No write-path smoke test was run against production, because
+`ledger_immutable` makes a courtesy-grant row permanent — a synthetic guest
+could not be cleaned up afterward. The write paths are proven on the branch
+instead. Grid digits are already randomly assigned; teams are still the
+placeholder "Home"/"Away", and the Zeffy import has not been run.
+
+`.env.local` still points at the `phase-2-kennel` branch, not production, which
+keeps every local script and dev server off the production project.
+
+## Superseded: the Phase 2 prerequisite gate
 
 Prerequisite PR: https://github.com/hwetherall/the-kennel/pull/4
 Last code commit, and the head the baseline below was verified at: `5496558`.
@@ -139,11 +195,13 @@ unchanged guest. Interrupted runs retain an ignored, mode-0600 manifest for
 
 ## Remaining sequence
 
-1. Review PR #4, including the Squares digit-order change noted above, and demo
-   the preview, then obtain Phase 2 production promotion approval. No production
-   backend, live-site, or code merge is approved by the earlier
-   backend/API-only code-integration exception.
-2. Promote Phase 2, merge its PR, and smoke-test the live site.
+1. ~~Review PR #4 and obtain Phase 2 production promotion approval.~~ **Done**
+   10 September; approved without a prior hands-on demo.
+2. ~~Promote Phase 2, merge its PR, and smoke-test the live site.~~ **Done** —
+   see the promotion record at the top of this file. Still outstanding from this
+   step: Harry's own phone, host, projector and print pass over the live site,
+   and a decision on whether to run a write-path smoke test on production given
+   that its ledger rows cannot be removed.
 3. Phase 3 section 4 is **resolved** in `phase-3-undo-decision.md`, and needs no
    policy decision. Harry corrected the Studs v Spuds timing on 10 September:
    Studs is a break game, open during the break before the quarter it covers,
