@@ -313,6 +313,7 @@ Designed to be legible from across a pub. Large score and squares grid, the curr
 ## 10. Human tasks — Harry, not the agent
 
 - [ ] Export the Zeffy purchaser CSV, run the random square assignment, import
+- [ ] Set the two finalist team names in the host console once the prelims are done — the grid axes, score header and the host's four score buttons all read from them, and they ship as "Home"/"Away" placeholders
 - [ ] Choose the Studs v Spuds matchups, two or three per quarter, after the teams are known
 - [ ] Choose the Norm Smith candidate list
 - [ ] Set sponsor labels (Ironbark round, the pub's round)
