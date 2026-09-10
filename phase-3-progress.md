@@ -154,11 +154,18 @@ unchanged guest. Interrupted runs retain an ignored, mode-0600 manifest for
    while `period_status = 'live'`. The residual risk of reversing an already-paid
    Studs settlement stays deferred per section 5, mitigated by the draft/preview/
    confirm sequence.
+
+   Harry also decided on 10 September that a quarter carries **two or three
+   matchups**, count at the host's discretion, all open together during the
+   preceding break. `claude.md` section 7 and `phase-3.md` sections 3 through 12
+   were corrected to match both facts; the earlier "one pair per quarter, opens
+   at the start of the quarter, locks five minutes in" model is gone from the
+   specs.
 4. Only then create `phase-3-studs-futures` from the updated production backend
    parent. InsForge backend branches cannot nest.
 5. Continue schema/transaction tests, API, host, punter, projector, mixed-market
    rehearsal, preview, and final Phase 3 approval in the plan's specified order.
 
-Physical phone/pub/projector rehearsal, production promotion, the Phase 3 undo
-choice, and all Phase 3 acceptance criteria remain open. This is not a declaration
-that Phase 2 or Phase 3 is complete.
+Physical phone/pub/projector rehearsal, production promotion, and all Phase 3
+acceptance criteria remain open. The Phase 3 undo choice is closed. This is not a
+declaration that Phase 2 or Phase 3 is complete.

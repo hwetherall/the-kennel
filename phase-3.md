@@ -75,7 +75,7 @@ The SQL verification scripts intentionally roll back through an exception. They 
 
 The Squares board remains the primary product, default punter tab, and largest content on the projector. Phase 3 adds:
 
-1. **Studs v Spuds:** one configured pair of AFL athletes per quarter; back the higher quarter disposal total.
+1. **Studs v Spuds:** two or three configured pairs of AFL athletes per quarter, open during the break before the quarter they cover; back the higher quarter disposal total.
 2. **Match-winner Future:** home or away, available before first bounce.
 3. **Norm Smith Future:** a host-configured candidate list plus “Any other player”.
 
@@ -85,42 +85,81 @@ Preserve the server-authoritative ledger, pools, timing, and idempotency. One gu
 
 Use the existing stack and dependencies. Ask before adding a dependency. Use the installed InsForge skills before changing SDK integration, migrations, functions, or backend configuration. Avoid restructuring unrelated Phase 1 code.
 
-The following sections specify implementation defaults. The cross-market undo policy in section 4 is a new product decision and must be confirmed before dependent implementation; it is not part of Harry's earlier Next Goal-only approval.
+The following sections specify implementation defaults. Section 4 previously held an open product decision about cross-market undo; it is resolved and needs no confirmation, for the reason recorded there.
 
-## 4. Required design decision: spending a goal payout in another open market
+## 4. Resolved: spending a goal payout in another open market
 
-The Phase 2 undo fix covers later **Next Goal** markets. Studs v Spuds will be open for five minutes, overlapping Next Goal markets. That introduces a different dependency:
+**This section originally required a product decision. It no longer does.** It
+was written on the assumption that Studs v Spuds opens at the start of a quarter
+and locks five minutes in, overlapping live Next Goal markets. Harry corrected
+that on 10 September: Studs is a **break** game. It opens during the break before
+the quarter it covers, locks at that quarter's opening bounce, and stays closed
+for the whole quarter. See `phase-3-undo-decision.md` for the full analysis and
+the code citations behind what follows.
 
-1. A goal pays a guest 1,500 Bones.
-2. The guest stakes those Bones on the already-open Studs market, whose market sequence may precede the goal.
-3. The host undoes the goal.
-4. Refunding later Next Goal markets cannot recover the Bones in that Studs stake, so reversal would make the balance negative.
+The feared scenario needed a goal payout to be spent in a market that was open at
+the time of the goal. Under the corrected model that cannot happen, because
+during a live unsealed quarter — the only window in which a goal payout can be
+reversed — the only market that can accept a stake is Next Goal:
 
-This happens even if Studs has never settled. Restricting its settlement until the siren alone does not solve it. Do not expose concurrent markets until this case has a verified solution.
+- Score events only exist while `period_status = 'live'`.
+- Score undo refuses once `end_quarter` has written that quarter's
+  `quarter_results` row, so it never reaches back past a siren.
+- `place_bet` rejects any market that is not `open`, so a Studs market locked at
+  the bounce takes nothing for the rest of the quarter.
+- Studs for the next quarter has not opened, and both Futures locked at first
+  bounce.
 
-**Recommended policy for Harry to confirm:** when undo finds post-goal stakes in an unresolved Studs market, void and refund that entire affected Studs market before reversing the goal payout. Keep earlier unaffected markets intact. Show the host the affected prediction in the undo confirmation and show guests the refund reason. Do not silently reopen or extend its deadline. This is intentionally a rare score-correction consequence rather than a second wallet or partial-stake accounting system.
+That is exactly the case the applied Phase 2 undo loop already unwinds, newest
+first, before reversing the funding payout. **No ledger checkpoint, no
+cross-type undo loop, and no additional migration for this.**
 
-To implement that recommendation if approved:
+### The invariant that replaces it
 
-- Record a ledger sequence checkpoint on each goal after its settlement and before returning the mutation. Use the existing shared game lock to establish ordering; do not infer order from client timestamps or market creation sequence alone.
-- Detect unreversed negative stake rows after that checkpoint in other unresolved markets in the same quarter.
-- Refund/void affected Studs markets and unwind later Next Goal markets before reversing the original goal credits. All operations remain one transaction under the same lock order.
-- Already-void markets keep their refunds. Original-key retries do not create more credits.
-- A behind undo never changes markets.
-- Do not permit Studs settlement while that quarter's scores remain undoable. Futures lock at first bounce and settle only after full time.
-- Test already-open Studs markets with pre-goal stakes, post-goal increases, and later Next Goal spending of related refunds.
+> No market other than Next Goal is ever `open` while `period_status = 'live'`.
 
-If Harry prefers preserving unaffected stakes within the Studs market, design a separate, audited stake-reversal mechanism and its selection semantics before coding it. Do not quietly weaken non-negative balances or disable score undo.
+Enforce it in the database rather than by convention, folding in the lock-strategy
+work section 8 already calls for:
+
+- Markets carry a `lock_strategy` of `'deadline'` (Next Goal: a 90-second
+  `locks_at`) or `'bounce'` (Studs and both Futures: locked by a game
+  transition). `locks_at` is nullable for bounce-locked markets; do not invent a
+  far-future date to satisfy a timed-market constraint.
+- `start_quarter` locks every `open` bounce-locked market in the same transaction
+  that sets `period_status = 'live'`, under the existing game lock.
+- `place_bet` rejects a bounce-locked market whenever `period_status = 'live'`, so
+  a stale `open` row can never accept a stake.
+- Opening a bounce-locked market while `period_status = 'live'` is refused, so a
+  host mis-tap cannot recreate the overlap.
+- A behind undo never changes markets, as before.
+
+Studs and Futures share one lock rule, tested once.
+
+### The residual risk, deliberately deferred
+
+Reversing an **already-paid Studs settlement** still hits
+`ledger.balance_after CHECK (balance_after >= 0)` and aborts. The path: in a
+break, the finished quarter's Studs pays out, the next quarter's matchups are
+open in that same break, a guest stakes the payout, and only then does the host
+find a disposal number was wrong and want to correct it downward.
+
+Trigger and frequency are what changed. Score undo is guaranteed; a mis-typed
+number discovered after an explicit preview-and-confirm step is rare. Keep this
+deferred under section 5's existing rule that correcting an already-paid result
+needs a separate audited recovery design. The draft/preview/confirm sequence in
+section 5 is the mitigation, and an explicit void-and-refund path means the host
+is never pushed into guessing a number to get past the screen. Do not quietly
+weaken non-negative balances or disable score undo to get around it.
 
 ## 5. Studs v Spuds rules and data
 
 ### Configuration
 
-Configure four matchups, one for each quarter, using stable athlete IDs and display names. AFL athletes are not guest `players`; never join disposal records by nickname or treat an athlete as an authenticated app user.
+Configure two or three matchups for each quarter, using stable athlete IDs and display names. The count per quarter is the host's choice and need not be the same across quarters. AFL athletes are not guest `players`; never join disposal records by nickname or treat an athlete as an authenticated app user.
 
 A small `athletes` table and `studs_matchups` table are sufficient. Suggested matchup fields:
 
-- `id`, unique `quarter` (1–4), unique nullable `market_id`.
+- `id`, `quarter` (1–4), `slot` ordering within the quarter, unique nullable `market_id`. `quarter` is **not** unique: a quarter carries several matchups. Make `(quarter, slot)` unique for a stable display order.
 - `athlete_a_id`, `athlete_b_id`, with distinct-athlete constraint.
 - `baseline_a`, `baseline_b`: cumulative totals at the previous quarter boundary.
 - `ending_a`, `ending_b`: draft cumulative totals at this quarter's siren.
@@ -130,15 +169,15 @@ Store baseline and ending values used for the result so it can be reproduced. Re
 
 Q1 baselines are zero. For Q2–Q4, obtain previous-quarter cumulative totals for the actual two selected athletes. Different quarters may use different pairs: subtracting the prior matchup's numbers is wrong. Copy an earlier confirmed boundary only when both the athlete identity and immediately preceding quarter match; otherwise the host supplies the baseline at the break. Do not substitute zero for unknown statistics.
 
-If configuration or baselines are missing, start the match quarter and Squares normally, while showing that Studs did not open. Require configuration before the quarter starts; do not open it late after guests have seen part of that quarter's play.
+Matchups are configured and priced independently. If one matchup's configuration or baselines are missing, open the others and show that this one did not open; if none are ready, start the quarter and Squares normally with no Studs market. Configuration must be complete before the break opens that quarter's matchups. A matchup that misses its break does not open at all, because a bounce-locked market can never open during live play.
 
 ### Opening and locking
 
-- `start_quarter` opens that quarter's configured Studs market atomically with the normal Next Goal setup when its configuration is ready.
+- `end_quarter` opens the **next** quarter's ready matchups, in the same transaction that seals the finished quarter. Q1's matchups open pre-match instead, alongside the Futures.
+- `start_quarter` **locks** that quarter's Studs markets atomically with the transition to `live`, under the shared game lock. They stay locked for the whole quarter.
 - Copy athlete labels into immutable market option labels.
-- Set `locks_at` from the authoritative quarter-start instant plus five minutes.
-- A timed-open market becomes effectively locked using server time even if stored status is still `open`.
-- Global pause blocks new/increased stakes without extending the lock time or blocking scoring.
+- Studs markets are `lock_strategy = 'bounce'` with a null `locks_at`. There is no five-minute window and no clock; the bounce is an event.
+- Global pause blocks new/increased stakes without blocking scoring or the quarter transition.
 - No special Studs stake cap unless explicitly configured. Continue enforcing any market's `max_stake` server-side.
 
 ### Results and corrections
@@ -162,15 +201,15 @@ Corrections apply to draft readings before finalization and must not rewrite pre
 
 Disposal lookup must not hold up the Squares siren result. Use a two-stage quarter close:
 
-1. `end_quarter` immediately seals the score/Squares result and disables score undo for that quarter, voids/refunds unresolved Next Goal, and locks any Studs market. If Studs remains unresolved, mark the quarter ladder as awaiting its result.
-2. Host confirms Studs totals or explicitly voids it. In one transaction settle/refund the market, finalize the quarter profit ladder, and store the immutable standings for prizes.
+1. `end_quarter` immediately seals the score/Squares result, disables score undo for that quarter, voids/refunds unresolved Next Goal, and opens the next quarter's ready matchups. That quarter's own Studs markets are already locked, having locked at its opening bounce. While any of them is unresolved, mark the quarter ladder as awaiting its result.
+2. Host confirms each matchup's totals or explicitly voids it. In one transaction settle/refund the market, and once the quarter's last matchup is resolved, finalize the quarter profit ladder and store the immutable standings for prizes.
 
 Extend `quarter_results` with a ladder finalization state/timestamp. Existing Phase 2 quarter results are already final and must backfill as such. Keep the Squares result's `settled_at` separate from the ladder's finalization timestamp.
 
-- No Studs market, or one already voided by score correction: finalize the ladder at `end_quarter` as Phase 2 does.
-- Pending Studs: display provisional standings and “Awaiting Studs result”; do not announce prize winners yet.
+- No Studs market for the quarter: finalize the ladder at `end_quarter` as Phase 2 does.
+- Any pending matchup: display provisional standings and “Awaiting Studs result”; do not announce prize winners yet. A quarter with three matchups finalizes once, after the third.
 - Finalization can occur during the break or after the next quarter starts. Address the original quarter explicitly; never use the current quarter implicitly for delayed results.
-- Starting the next quarter and host scoring must not require disposal lookup to finish. Its own Studs configuration/baseline readiness is checked independently.
+- Starting the next quarter and host scoring must not require disposal lookup to finish. The next quarter's own matchup configuration and baseline readiness is checked independently. A still-pending result from an earlier quarter never blocks a bounce.
 - Historical quarter results display their stored final standings, not a fresh query over the current quarter.
 - Retried siren and result-confirmation requests must not double-refund, double-pay, or change finalized standings.
 
@@ -185,7 +224,7 @@ Configure exactly one match-winner Future and one Norm Smith Future for this eve
 - Configuration can be edited in draft. Freeze options, labels, and caps when opened; no relabelling an option under existing stakes.
 - Lock both Futures in the same transaction that starts Q1. Requests arriving after that transition are rejected under the shared game lock.
 - First-bounce timing is an event transition, not a predicted kickoff timestamp. Do not invent a far-future lock date to satisfy a timed-market constraint.
-- Add an explicit lock strategy such as `deadline` versus `first_bounce`, adjust open-market constraints, and ensure both `place_bet` and effective snapshots enforce it. All paths must use the same server rule.
+- Add an explicit lock strategy of `deadline` versus `bounce`, adjust open-market constraints, and ensure both `place_bet` and effective snapshots enforce it. All paths must use the same server rule. Studs shares `bounce` with the Futures, per section 4, so this is one rule and not two: the Futures lock at the Q1 bounce and Studs at the bounce of the quarter it covers.
 - Missed pre-match setup does not prevent Q1 starting. Do not open Futures after first bounce.
 
 ### Full time
@@ -207,9 +246,9 @@ Use new migrations; preserve all existing migration files as applied history. Pr
 ### Database changes
 
 - Add athlete/matchup data, a relation from each Studs market to its configuration, and appropriate foreign-key indexes.
-- Ensure at most one Studs market per quarter and one of each Future per event. Preserve the one-active-Next-Goal partial index; it must not forbid other market types.
+- Ensure at most one market per configured matchup, distinct athlete pairs within a quarter, and one of each Future per event. A quarter carries several Studs markets, so do not add a one-per-quarter constraint. Preserve the one-active-Next-Goal partial index; it must not forbid other market types.
 - Extend market lock strategy and public effective-status calculation.
-- Extend ledger/score metadata only as needed for the approved cross-market undo policy.
+- No ledger or score metadata is needed for cross-market undo; section 4 explains why. Add instead the lock-strategy column and the guard that keeps bounce-locked markets from being open or staked while `period_status = 'live'`.
 - Preserve `UNIQUE(market_id, player_id)`, composite bet-option ownership, audit guards, server-only ledger writes, and idempotency receipts scoped to action and actor.
 - Freeze quarter ladder results separately from Squares results; backfill existing quarter results safely.
 - Enable RLS and deny direct browser table/RPC access consistent with the existing edge boundary. Guest users remain referenced through the project's existing guest player model.
@@ -260,24 +299,24 @@ Build on the completed Phase 2 interface; do not design around its current empty
 
 - Score/undo buttons remain first and largest.
 - Setup: four matchup rows with athlete identities/baselines; Future candidate list and caps; a pre-bounce readiness summary.
-- Quarter start reports whether Studs opened or why it was skipped, without hiding score entry.
+- The siren reports which of the next quarter's matchups opened and why any were skipped. Quarter start reports that they have locked. Neither hides score entry.
 - Siren immediately shows the Squares winner. Pending Studs results are a separate clear task.
 - Cumulative input labels, visible baseline and computed quarter delta, a result preview, then explicit confirmation or void.
 - A queue of unresolved quarter/Future results, so the host can finish older-quarter stats correctly.
-- Undo confirmation must disclose any additional predictions that will be refunded under the confirmed cross-market policy.
+- Undo confirmation discloses the Next Goal markets that will be refunded. Per section 4 no other market type can be affected.
 
 ### Punter
 
 - Squares stays the default tab; Kennel groups live quarter predictions and pre-match Futures.
 - Each market has its own pool, position, selection lock, remaining cap, request state, and retry key.
-- Next Goal stays prominent during play; Futures show “Locks at first bounce” before Q1 and “Awaiting full-time result” after lock.
+- The Kennel tab follows the game phase, because Studs and Next Goal are never open together. During play, Next Goal is prominent and the quarter's Studs markets show “Locked until the siren”. During a break, the next quarter's matchups are prominent and show that they lock at the bounce. Futures show “Locks at first bounce” before Q1 and “Awaiting full-time result” after.
 - Multi-option Norm Smith pools remain readable around 360 px; do not squeeze candidates into a two-team bar.
 - State clearly that Futures count toward Top Dog only. Show signed net profit and distinguish refunds from positive profit.
 - Finalized quarter standings and provisional/final Top Dog are visibly distinct.
 
 ### Projector and accessibility
 
-Keep score/Squares dominant. Show Next Goal, a compact current-quarter Studs summary, and quarter top five. Display Future results and final Top Dog when relevant rather than crowding every market onto the grid all night.
+Keep score/Squares dominant. Show whichever game is live — Next Goal during play, the coming quarter's Studs matchups during a break — plus a compact summary of the current quarter's locked Studs positions and the quarter top five. Display Future results and final Top Dog when relevant rather than crowding every market onto the grid all night.
 
 Preserve large touch targets, keyboard focus, labels/live regions, reduced motion, offline state, and information conveyed through text as well as color.
 
@@ -293,12 +332,14 @@ Retain every Phase 1/2 regression, especially the five goal-undo scenarios. Add 
 - Draft corrections change no ledger; finalized earlier quarters remain immutable.
 - Siren settles Squares immediately while Studs stats are pending; delayed quarter finalization uses the addressed quarter and freezes its own ladder exactly once.
 - An unconfigured matchup cannot block start/scoring/end-quarter.
-- Two Futures can coexist with Next Goal and Studs; one-active-Next-Goal still holds.
+- Two Futures and several Studs markets coexist pre-match; one-active-Next-Goal still holds and does not forbid them.
+- No bounce-locked market can be opened or staked while `period_status = 'live'`, including with a forged client time or a stale `open` row. `start_quarter` locks every one of them atomically.
+- A quarter carries several matchups that open, lock, and resolve independently, and its ladder finalizes exactly once after the last of them.
 - Concurrent first-bounce and Future stake requests serialize correctly; no post-bounce request succeeds, even with forged client time.
 - Future cap applies to total stake across increases. Neither Future affects quarter profit, both affect Top Dog.
 - Norm Smith selected candidate, “Any other player”, zero-winning-pool, and explicit void work with more than two options and audited dust.
 - Generic recovery endpoints cannot bypass type-specific restrictions.
-- Cross-market goal-payout spending and undo pass under the policy confirmed in section 4. Include stakes on older-created Studs markets, increases to existing positions, replayed requests, and later Next Goal spending.
+- The five existing goal-undo scenarios still pass unchanged. Per section 4 there is no cross-market spending case to test, because no other market can accept a stake during live play; assert that invariant directly rather than testing a policy for it.
 - All balances equal ledger sums; pools equal accepted stakes; settlement payouts plus dust conserve the pool; reversals are exact and unique.
 - Advisor/RLS checks show no public economic mutation path or unresolved introduced warning/critical finding. Report checks that did not run.
 
@@ -306,7 +347,7 @@ Retain every Phase 1/2 regression, especially the five goal-undo scenarios. Add 
 
 - Host configures all matchups/Futures, guests stake pre-bounce, Q1 locks Futures, and quarter markets appear correctly.
 - Guests hold separate positions in simultaneous markets and increase only their chosen option.
-- Host enters a goal, exercises the approved cross-market undo, and all devices reconcile.
+- Host enters a goal, exercises goal undo, and all devices reconcile. Confirm that the quarter's Studs markets are visibly locked throughout and are untouched by the undo.
 - Siren displays Squares immediately; host corrects a draft reading and finalizes the quarter prize once.
 - Q4 closes, Match winner and Norm Smith settle, and Top Dog becomes final only when all results are resolved.
 - Pause/offline/reconnect and uncertain original-key retries do not duplicate stakes or overwrite newer snapshots.
@@ -317,10 +358,10 @@ Retain every Phase 1/2 regression, especially the five goal-undo scenarios. Add 
 
 1. Confirm the existing branch, actual backend link, environment, and current progress; run the baseline checks.
 2. Finish and gate Phase 2 as described in section 2. Ask only for genuinely missing setup or required final promotion approval; earlier authorization persists.
-3. Before Phase 3 dependent code, present the concrete cross-market undo proposal from section 4 to Harry and record the chosen behavior here.
+3. Section 4 is resolved and blocks nothing; `phase-3-undo-decision.md` records the analysis. No approval is outstanding for it.
 4. After Phase 2 is present in the production parent, create a new InsForge schema-only backend branch `phase-3-studs-futures`. Do not branch from the still-Phase-1 parent and assume Phase 2 objects exist. Verify the supported CLI branch workflow rather than assuming nested branches are supported.
 5. Point ignored local environment values to that backend, restart the dev server, and verify the complete Phase 2 baseline there. Seed only guarded non-production rehearsal data.
-6. Add constraints/schema/transactions and test cases before new UI. Prove cross-market undo and first-bounce locking first.
+6. Add constraints/schema/transactions and test cases before new UI. Prove the section 4 invariant and bounce locking first: no bounce-locked market open or stakeable during live play, and `start_quarter` locking them atomically.
 7. Extend the edge API and snapshot contracts; verify authenticated flows directly.
 8. Build host configuration/results, then punter market cards and ladder states, then projector additions.
 9. Add deterministic demo cases, full browser coverage, failure/retry checks, and the mixed-market load rehearsal.
@@ -333,8 +374,8 @@ Retain every Phase 1/2 regression, especially the five goal-undo scenarios. Add 
 Phase 3 is ready only when:
 
 - [ ] Phase 2's remaining work and gate are complete.
-- [ ] The new cross-market undo rule is explicitly confirmed, implemented, and verified.
-- [ ] Four identity-correct Studs matchups open/lock/resolve safely, including ties and missing stats.
+- [ ] The invariant replacing section 4's undo rule is implemented and verified: no market other than Next Goal is ever open while play is live.
+- [ ] Every configured Studs matchup, two or three per quarter, is identity-correct and opens in the preceding break, locks at the bounce, and resolves safely, including ties and missing stats.
 - [ ] Squares sirens and score controls remain reliable while disposal results are pending.
 - [ ] Historical quarter prizes finalize once and exclude both Futures.
 - [ ] Both Futures lock atomically at first bounce, enforce caps, and resolve correctly after full time.
@@ -344,6 +385,6 @@ Phase 3 is ready only when:
 - [ ] Automated, mixed-market load, phone/projector, offline, and live promotion checks pass with limitations recorded.
 - [ ] The phase is demoed, approved, merged, deployed, and live-smoke-tested.
 
-Harry supplies the four matchups, Norm Smith candidates, sponsor labels, and actual cumulative disposal readings once known. Use clearly labelled synthetic athletes only in demos/test branches. Ask for missing real configuration when needed; never guess the finalist teams or award recipient.
+Harry supplies the matchups, two or three per quarter, plus Norm Smith candidates, sponsor labels, and actual cumulative disposal readings once known. Use clearly labelled synthetic athletes only in demos/test branches. Ask for missing real configuration when needed; never guess the finalist teams or award recipient.
 
 The new thread may begin with: “Read phase-3.md and the linked handoff files, verify the actual Phase 2 state, then work through the prerequisites and Phase 3 plan in order.”

@@ -21,7 +21,8 @@ coming quarter**. It is a break game, not an in-play game:
 - At the siren it is reconciled and paid out, and the next quarter's matchups
   open for the break.
 
-So Studs resets every quarter, and a quarter may carry more than one matchup.
+So Studs resets every quarter, and a quarter carries two or three matchups, all
+open together during the preceding break and all locking at the same bounce.
 Next Goal is the continuous in-play game, resetting on every goal.
 
 Section 4, phase-3.md section 5 ("Set `locks_at` from the authoritative
@@ -48,9 +49,9 @@ the time of the goal. Four guards in the applied Phase 2 schema close that off.
 3. **Locked markets accept nothing.** `kennel_place_bet` raises `Market has
    locked` unless `status = 'open'` (line 281). A Studs market locked at the
    bounce cannot take a stake for the rest of the quarter.
-4. **Nothing else is open during play.** Studs for the live quarter is locked at
-   the bounce; Studs for the next quarter has not opened yet; both Futures locked
-   at first bounce.
+4. **Nothing else is open during play.** Every Studs market for the live quarter
+   is locked at the bounce; the next quarter's matchups have not opened yet; both
+   Futures locked at first bounce.
 
 So during any live, unsealed quarter — the only window in which a goal payout
 can be reversed — **the only market that can accept a stake is Next Goal**. That

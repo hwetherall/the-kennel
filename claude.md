@@ -248,10 +248,12 @@ The host's score entry drives this automatically:
 
 One host action drives the squares board and the market cycle together. The betting window lands in the gap between a goal and the next centre bounce, which is exactly when phones should be out.
 
-### Studs v Spuds — settles each quarter
-A pre-selected pair of players, most disposals in that quarter. Four matchups configured before the night, one per quarter, editable from the console.
+### Studs v Spuds — a break game, settles each quarter
+Pre-selected pairs of players, most disposals in the **coming** quarter. Two or three matchups per quarter, configured before the night and editable from the console.
 
-Opens at the start of the quarter, locks five minutes in.
+Opens during the break before the quarter it covers — pre-match for the Q1 matchups. **Locks at that quarter's opening bounce**, by the event and not by a clock, and stays closed for the whole quarter. Reconciled and paid out at the siren, which is when the next quarter's matchups open.
+
+So Studs is never open while play is live. Next Goal fills the play, Studs fills the break. The two games never compete for the same phone, and the break is exactly when everyone is at the bar and the Kennel needs something running.
 
 At each siren the host enters **cumulative game-to-date disposals** for both players. The server computes the quarter delta by subtracting the previous entry. The host never does arithmetic at 1am, and a mistyped number can be corrected without corrupting earlier quarters.
 
@@ -311,7 +313,7 @@ Designed to be legible from across a pub. Large score and squares grid, the curr
 ## 10. Human tasks — Harry, not the agent
 
 - [ ] Export the Zeffy purchaser CSV, run the random square assignment, import
-- [ ] Choose the four Studs v Spuds matchups after the teams are known
+- [ ] Choose the Studs v Spuds matchups, two or three per quarter, after the teams are known
 - [ ] Choose the Norm Smith candidate list
 - [ ] Set sponsor labels (Ironbark round, the pub's round)
 - [ ] Print the backup squares grid
