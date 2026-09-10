@@ -101,14 +101,19 @@ function createBackend() {
 }
 
 async function rpc<T>(backend: ReturnType<typeof createBackend>, name: string, args: JsonRecord = {}) {
-  const { data, error } = await backend.database.rpc(name, args);
-  if (error) {
+  for (let attempt = 0; ; attempt++) {
+    const { data, error } = await backend.database.rpc(name, args);
+    if (!error) return data as T;
     if (publicErrors.has(error.message)) {
       throw new RequestError(error.message, /session/i.test(error.message) ? 401 : 400);
     }
-    throw new Error('Database action failed');
+    // A refused database connection has executed no SQL. Spread a brief burst
+    // over available connections; preserve the exact actor, intent and receipt key.
+    const capacity = error.code === '53300' || error.code === 'PGRST000' || /too many clients already|remaining connection slots are reserved/i.test(error.message);
+    if (!capacity) throw new Error('Database action failed');
+    if (attempt >= 5) throw new RequestError('The Kennel is busy. Retry with the same request.', 503);
+    await new Promise((resolve) => setTimeout(resolve, 100 * 2 ** attempt + Math.floor(Math.random() * 200)));
   }
-  return data as T;
 }
 
 async function playerHash(req: Request) {

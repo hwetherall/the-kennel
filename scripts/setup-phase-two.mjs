@@ -25,7 +25,7 @@ BEGIN
     '2026-09-26T04:30:00Z', 'America/Denver', 'Home', 'Away', NULL
   ) ON CONFLICT (id) DO NOTHING;
   INSERT INTO public.grid_config (id, row_digits, col_digits)
-  VALUES (1, ARRAY[7,2,9,4,0,6,1,8,3,5], ARRAY[3,8,1,6,0,5,9,2,7,4])
+  VALUES (1, ARRAY[0,1,2,3,4,5,6,7,8,9], ARRAY[0,1,2,3,4,5,6,7,8,9])
   ON CONFLICT (id) DO NOTHING;
   INSERT INTO public.game_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
   INSERT INTO public.squares (id, row_index, col_index)

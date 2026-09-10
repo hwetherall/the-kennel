@@ -1,3 +1,5 @@
+import { MarketSummaryCard } from '../components/market-card'
+import { Ladder } from '../components/ladder'
 import { Link } from 'react-router-dom'
 import { OfflineBanner } from '../components/offline-banner'
 import { QuarterResults } from '../components/quarter-results'
@@ -41,11 +43,12 @@ export function ScreenPage() {
         <aside className="projector-sidebar">
           <QuarterResults results={snapshot.quarterResults} />
           <section className="next-up-card">
-            <span className="eyebrow">Coming in Phase 2</span>
-            <h2>The Kennel</h2>
-            <p>Put your Bones where your mouth is.</p>
+            {snapshot.activeMarket ? <MarketSummaryCard market={snapshot.activeMarket} serverNow={snapshot.serverNow} /> : <p>Next Goal opens when play resumes.</p>}
             <small>Bones have no cash value.</small>
           </section>
+          <Ladder title={snapshot.game.periodStatus === 'final' ? 'Top Dog · final' : `Q${snapshot.game.quarter} · top five`}
+            entries={(snapshot.game.periodStatus === 'final' ? snapshot.topDogLadder : snapshot.quarterLadder).slice(0, 5)} />
+          {snapshot.recentMarket && <details><summary>Latest result</summary><MarketSummaryCard market={snapshot.recentMarket} serverNow={snapshot.serverNow} /></details>}
         </aside>
       </div>
     </main>

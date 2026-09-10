@@ -1,0 +1,20 @@
+{
+  "guests": 60,
+  "loadGate": true,
+  "calls": 167,
+  "expectedRejections": 4,
+  "transientRetries": 65,
+  "errors": 0,
+  "latencyMs": {
+    "p50": 1064,
+    "p95": 1758,
+    "max": 1905
+  },
+  "invariants": {
+    "balances": true,
+    "pools": true,
+    "conservation": true,
+    "reversals": true,
+    "ledger_guard": true
+  }
+}

@@ -381,3 +381,39 @@ form small, .host-card small { color: #81756c; font-size: .66rem; line-height: 1
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Kennel remains secondary to the score and Squares board. */
+.kennel-stack { display: grid; gap: 18px; max-width: 760px; margin-inline: auto; }
+.bones-card, .market-card, .ladder-card { border: 1px solid #d7dace; border-radius: 16px; padding: 20px; background: #fff; color: #173d31; }
+.bones-card { display: grid; gap: 6px; background: #173d31; color: #fff; }
+.bones-card > strong { font-size: 2.4rem; }
+.bones-card small { opacity: .85; }
+.market-summary h2 { margin-block: 8px; font-size: 1.35rem; }
+.market-options, .stake-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.market-options .button, .stake-buttons .button { min-width: 0; white-space: normal; min-height: 48px; }
+.pool-split { display: grid; gap: 12px; margin-block: 18px; }
+.pool-option > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.pool-option span { font-size: .9rem; }
+.pool-option progress { display: block; width: 100%; height: 14px; accent-color: #b18c2d; }
+.position-note, .confirmation { padding: 14px; background: #f5efdc; border-radius: 10px; }
+.ladder-list { list-style: none; padding: 0; margin: 12px 0 0; }
+.ladder-list li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 12px 6px; border-bottom: 1px solid #e2e5dc; }
+.ladder-list strong { overflow-wrap: anywhere; }
+.ladder-me { background: #f5efdc; }
+.activity-list { padding: 0; list-style: none; }
+.activity-list li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; padding-block: 10px; }
+summary { cursor: pointer; min-height: 44px; padding-block: 12px; font-weight: 700; }
+.host-card > .ladder-card { margin-block: 20px; }
+.projector-sidebar .ladder-card { background: #173d31; color: white; border-color: #426453; }
+.projector-sidebar .market-summary h2 { font-size: 1.2rem; }
+.projector-sidebar .pool-option > div { font-size: 1rem; }
+.projector-sidebar .ladder-list li { border-color: #426453; }
+.inline-error .button { margin: 8px; }
+@media (min-width: 1050px) and (min-height: 800px) {
+  .grid-card--projector .square { min-height: clamp(28px, calc((100vh - 540px) / 10), 76px); }
+  .projector-sidebar .muted-note { color: #c2d6cd; }
+}
+.pool-option progress { appearance: none; border: 0; border-radius: 5px; overflow: hidden; background: #e8e5dc; }
+.pool-option progress::-webkit-progress-bar { background: #e8e5dc; }
+.pool-option progress::-webkit-progress-value { background: #b18c2d; }
+.pool-option progress::-moz-progress-bar { background: #b18c2d; }

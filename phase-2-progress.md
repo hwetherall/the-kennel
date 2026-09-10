@@ -1,11 +1,12 @@
 # Phase 2 implementation progress
 
-Updated 7 September 2026. The product contract and acceptance criteria remain in [phase-2.md](phase-2.md).
+Updated 10 September 2026. The product contract and acceptance criteria remain in [phase-2.md](phase-2.md).
 
 ## Isolation
 
 - Implementation branch: `codex/phase-2-kennel`, originally created from verified `main` at `66fe8e1`.
 - Harry explicitly authorized merging this backend/API increment into `main` on 7 September 2026 and preparing `codex/phase-3-studs-futures` for a new-thread handoff. This code-integration exception does not declare Phase 2 complete or authorize production backend promotion.
+- PR #3 is now merged at `197e496`; the handoff branch was created from that merge. `phase-3.md` contains the next-thread plan and explicitly carries forward the unfinished Phase 2 work.
 - InsForge backend: `phase-2-kennel`, schema-only, ready, selected in the local CLI. Confirmed against the CLI branch list in this session.
 - Branch API: `https://bk8ptwjs-zww.function2.insforge.app/kennel-api`.
 - Ignored `.env.local` points to the branch. The prior configuration is backed up in ignored `.env.phase-one.local`. Browser polling uses no API key.
@@ -78,3 +79,12 @@ repeated settlement/reversal cycles.
 4. Demo, complete the approval gate, and only then promote the backend and deploy the completed experience to production.
 
 This increment is approved for code integration. Phase 2 remains incomplete and is not ready for production backend promotion or the final product gate. The next-thread instructions are in `phase-3.md` on the handoff branch.
+
+## Prerequisite completion work on the Phase 3 handoff branch
+
+The remaining Phase 2 interface, resilience, demo, and rehearsal work is being
+completed before any Phase 3 feature. The guarded real-HTTP 60-player rehearsal
+now passes after same-identity transient gateway retries; its exact report and
+cleanup evidence are in [phase-3-progress.md](phase-3-progress.md) and
+`phase-2-rehearsal-results.json`. The backend remains isolated on
+`phase-2-kennel`; no production promotion has occurred.
