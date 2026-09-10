@@ -18,7 +18,7 @@ import {
   startQuarter,
   undoLatestScore,
 } from '../lib/api'
-import { shuffledDigits } from '../lib/game'
+import { LAST_DIGITS, shuffledDigits } from '../lib/game'
 import {
   clearHostSession,
   getHostSession,
@@ -306,6 +306,9 @@ function GridSettings({
       <div className="digit-preview"><span>Home</span>{rows.map((digit) => <i key={digit}>{digit}</i>)}</div>
       <div className="digit-preview"><span>Away</span>{columns.map((digit) => <i key={digit}>{digit}</i>)}</div>
       <div className="inline-actions">
+        <button className="button button--ghost" disabled={disabled} onClick={() => { setRows([...LAST_DIGITS]); setColumns([...LAST_DIGITS]) }}>
+          Order 0–9
+        </button>
         <button className="button button--ghost" disabled={disabled} onClick={() => { setRows(shuffledDigits()); setColumns(shuffledDigits()) }}>
           Shuffle digits
         </button>

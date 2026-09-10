@@ -11,8 +11,8 @@ import { winningSquareId } from './game'
 import { settleReferenceMarket } from './settlement'
 
 const grid: GridConfig = {
-  rowDigits: [7, 2, 9, 4, 0, 6, 1, 8, 3, 5],
-  colDigits: [3, 8, 1, 6, 0, 5, 9, 2, 7, 4],
+  rowDigits: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  colDigits: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
 }
 
 let state: PublicSnapshot = {

@@ -1,5 +1,7 @@
 import type { GameState, GridConfig } from '../types'
 
+export const LAST_DIGITS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as const
+
 export function scoreLine(goals: number, behinds: number, points: number) {
   return `${goals}.${behinds} (${points})`
 }

@@ -21,6 +21,12 @@ test('guest joins and sees highlighted squares on a phone', async ({ page }) => 
   await expect(page.getByRole('heading', { name: 'Grand Final Squares' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Macca 2 squares' })).toBeVisible()
   await expect(page.getByRole('gridcell', { name: /currently live/i })).toBeVisible()
+  await expect(page.locator('.digit-header:not(.digit-header--row)')).toHaveText([
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+  ])
+  await expect(page.locator('.digit-header--row')).toHaveText([
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
+  ])
   await page.screenshot({ path: `/tmp/kennel-${test.info().project.name}-guest.png`, fullPage: true })
 })
 
