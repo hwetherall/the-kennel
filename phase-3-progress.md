@@ -4,16 +4,21 @@ Updated 10 September 2026. Follow [phase-3.md](phase-3.md) in order.
 
 ## Current position: Phase 2 prerequisite gate
 
-Draft prerequisite PR: https://github.com/hwetherall/the-kennel/pull/4
-Implementation commits: `7c76335` and `2ba8c44`. The second commit separates
-concurrent Squares-order changes while leaving those working files intact.
-The hosted preview now uses the isolated PR code, rather than the combined
-working tree. No code PR or backend has been merged as part of this work.
+Prerequisite PR: https://github.com/hwetherall/the-kennel/pull/4
+Head commit at last verification: `5496558`. The branch carries six commits on
+top of `main` (`197e496`): handoff `762ed56`, then `7c76335`, `2ba8c44`,
+`4f5e47f`, `4b6da0f`, and `5496558`. No code PR or backend has been merged as
+part of this work.
 
-The existing code branch is `codex/phase-3-studs-futures`, based on `197e496`
-with handoff commit `762ed56`. The selected backend is the ready, schema-only
-`phase-2-kennel` branch. No Phase 3 backend has been created and no Phase 3
-markets have been implemented or exposed.
+`2ba8c44` originally held the concurrent Squares digit-order edits out of this
+increment, but `5496558` landed them on this branch, so they are now in the
+PR's scope and are listed below. The earlier distinction between an isolated
+63-test PR and a 64-test working tree no longer exists: the PR is the working
+tree.
+
+The existing code branch is `codex/phase-3-studs-futures`. The selected backend
+is the ready, schema-only `phase-2-kennel` branch. No Phase 3 backend has been
+created and no Phase 3 markets have been implemented or exposed.
 
 The Phase 2 prerequisite increment adds:
 
@@ -31,21 +36,31 @@ The Phase 2 prerequisite increment adds:
   settlement, recovery undo, receipts, and stored quarter standings.
 - A guarded real-HTTP 60-player rehearsal and live-preview browser verification.
 
+It also carries one change to the Phase 1 Squares board, outside the original
+prerequisite scope and needing review as a Squares change: the grid now renders
+its row and column headers as a fixed `0`-`9` sequence and resolves each cell by
+looking the drawn digit up in `grid.rowDigits`/`grid.colDigits`, instead of
+rendering the headers in drawn order. Square ownership and the live-square
+highlight are unchanged, because both digit arrays are permutations of `0`-`9`.
+`/host/print` renders the same component, so the printed backup grid keeps the
+same layout as the screen.
+
 No existing migration file was changed or reapplied. The branch still has the
 three Phase 2 migrations recorded in `phase-2-progress.md`.
 
 ## Verified evidence
 
-- Baseline: 50 unit/component/edge tests, production build, six Phase 1 browser
-  tests, both rolled-back database suites (including five recovery scenarios),
-  and 17 read-only deployed edge checks passed.
-- Isolated prerequisite PR: 63 unit/component/edge tests and production build
-  pass. The combined working tree passes 64 tests, including one concurrent
-  Squares-order test outside this increment. Ten browser flows also pass from
-  the isolated PR source.
-- Ten phone/desktop demo browser flows pass, including 360px width,
-  goal-payout spending and undo, pause, offline events, quarter finalization,
-  recovery confirmation, and projector fit at 1920×1080.
+- Handoff baseline: 50 unit/component/edge tests, production build, six Phase 1
+  browser tests, both rolled-back database suites (including five recovery
+  scenarios), and 17 read-only deployed edge checks passed.
+- Re-verified at head `5496558` on 10 September, from a single tree: 64
+  unit/component/edge tests in eight files, production build, 10 phone and
+  desktop browser flows, `verify-phase-two.mjs`, `verify-phase-two.mjs
+  --undo-recovery`, and `verify-phase-two-edge.mjs` (17 read-only deployed
+  checks). Both database suites rolled their fixtures back.
+- The 10 browser flows cover 360px width, goal-payout spending and undo, pause,
+  offline events, quarter finalization, recovery confirmation, and projector fit
+  at 1920×1080.
 - Production build passes with the existing SDK `crypto` externalization warning.
 - Branch preview: https://bk8ptwjs-zww.insforge.site
   (deployment `51b66051-81ce-45e8-9187-cd60864155ac`).
@@ -123,12 +138,14 @@ unchanged guest. Interrupted runs retain an ignored, mode-0600 manifest for
 
 ## Remaining sequence
 
-1. Review draft PR #4 and demo the preview, then obtain Phase 2 production
-   promotion approval. No production backend, live-site, or code merge is approved
-   by the earlier backend/API-only code-integration exception.
+1. Review PR #4, including the Squares digit-order change noted above, and demo
+   the preview, then obtain Phase 2 production promotion approval. No production
+   backend, live-site, or code merge is approved by the earlier
+   backend/API-only code-integration exception.
 2. Promote Phase 2, merge its PR, and smoke-test the live site.
-3. Present and obtain explicit confirmation of the cross-market undo policy in
-   Phase 3 section 4. It remains **unconfirmed** and unimplemented.
+3. Confirm the cross-market undo policy in Phase 3 section 4. The concrete
+   proposal is written up in `phase-3-undo-decision.md`; Harry's answer remains
+   **unconfirmed** and the policy is unimplemented.
 4. Only then create `phase-3-studs-futures` from the updated production backend
    parent. InsForge backend branches cannot nest.
 5. Continue schema/transaction tests, API, host, punter, projector, mixed-market
