@@ -5,10 +5,11 @@ Updated 10 September 2026. Follow [phase-3.md](phase-3.md) in order.
 ## Current position: Phase 2 prerequisite gate
 
 Prerequisite PR: https://github.com/hwetherall/the-kennel/pull/4
-Head commit at last verification: `5496558`. The branch carries six commits on
-top of `main` (`197e496`): handoff `762ed56`, then `7c76335`, `2ba8c44`,
-`4f5e47f`, `4b6da0f`, and `5496558`. No code PR or backend has been merged as
-part of this work.
+Last code commit, and the head the baseline below was verified at: `5496558`.
+The branch carries six code commits on top of `main` (`197e496`): handoff
+`762ed56`, then `7c76335`, `2ba8c44`, `4f5e47f`, `4b6da0f`, and `5496558`, plus
+documentation commits that change no code. No code PR or backend has been merged
+as part of this work.
 
 `2ba8c44` originally held the concurrent Squares digit-order edits out of this
 increment, but `5496558` landed them on this branch, so they are now in the
