@@ -12,10 +12,12 @@ import { readFileSync } from 'node:fs'
 const MIGRATIONS = [
   'migrations/20260910221500_phase-3-lock-strategy.sql',
   'migrations/20260916120000_phase-3-athletes-and-futures.sql',
+  'migrations/20260916140000_phase-3-futures.sql',
 ]
 const SUITES = [
   ['tests/backend/phase-three-lock-strategy.sql', 'PHASE_THREE_LOCK_ASSERTIONS_PASSED_ROLLED_BACK'],
   ['tests/backend/phase-three-athletes-futures.sql', 'PHASE_THREE_ATHLETES_ASSERTIONS_PASSED_ROLLED_BACK'],
+  ['tests/backend/phase-three-futures.sql', 'PHASE_THREE_FUTURES_ASSERTIONS_PASSED_ROLLED_BACK'],
 ]
 
 const project = JSON.parse(readFileSync('.insforge/project.json', 'utf8'))
