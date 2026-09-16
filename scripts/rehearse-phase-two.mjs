@@ -18,7 +18,7 @@ const literal = (value) => `'${JSON.stringify(value).replaceAll("'", "''")}'::js
 assert(['--run', '--smoke', '--cleanup'].includes(process.argv[2]) && process.argv.length === 3, 'Use --run, --smoke or --cleanup')
 const project = JSON.parse(readFileSync('.insforge/project.json', 'utf8'))
 const branch = cli('branch', 'list').data.find((b) => b.id === project.project_id)
-assert(branch?.name === 'phase-2-kennel' && branch.branch_state === 'ready' && branch.parent_project_id && branch.appkey !== 'bk8ptwjs', 'Refusing anything except ready phase-2-kennel')
+assert(branch?.branch_state === 'ready' && branch.parent_project_id && branch.appkey !== 'bk8ptwjs', 'Refusing anything except a ready non-production branch')
 assert.equal(project.oss_host, `https://${branch.appkey}.${branch.region}.insforge.app`)
 const manifestFile = '.env.rehearsal.local'
 const url = `https://${branch.appkey}.function2.insforge.app/kennel-api`
@@ -165,7 +165,7 @@ try {
   assert.deepEqual(snapshot.quarterResults[0].quarterLadder, frozen)
   assert(snapshot.quarterLadder.every((p) => p.profit === 0))
   console.log(`Authenticated ${guestCount}-player HTTP flows passed; checking the live preview next.`)
-  await verifyPreview({ appUrl: 'https://bk8ptwjs-zww.insforge.site', guest: guests[0], opponent: guests[1], hostSession: login })
+  await verifyPreview({ appUrl: `https://${branch.appkey}.insforge.site`, guest: guests[0], opponent: guests[1], hostSession: login })
   const invariants = query(`SELECT
     NOT EXISTS (SELECT 1 FROM public.players p WHERE balance <> (SELECT COALESCE(sum(amount),0) FROM public.ledger l WHERE l.player_id=p.id)) AS balances,
     NOT EXISTS (SELECT 1 FROM public.market_options o WHERE pool_bones <> (SELECT COALESCE(sum(stake),0) FROM public.bets b WHERE b.option_id=o.id)) AS pools,
