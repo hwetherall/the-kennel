@@ -14,6 +14,7 @@ DECLARE
   a uuid; b uuid;
   ng uuid; studs1 uuid; studs2 uuid; futures uuid;
   opt_a uuid; opt_b uuid; ng_home uuid;
+  ath1 uuid; ath2 uuid; ath3 uuid; ath4 uuid;
   s jsonb; locked_count integer; strategy text;
 BEGIN
   -- Same idle-branch guard as the Phase 2 suite: never run over live rehearsal state.
@@ -27,6 +28,12 @@ BEGIN
 
   s := public.kennel_join_player('T3A-' || suffix, '', a_hash); a := (s#>>'{player,id}')::uuid;
   s := public.kennel_join_player('T3B-' || suffix, '', b_hash); b := (s#>>'{player,id}')::uuid;
+
+  -- Studs options name athletes, per the step 2 option-key rule.
+  INSERT INTO public.athletes(display_name) VALUES('Lock Athlete One ' || suffix) RETURNING id INTO ath1;
+  INSERT INTO public.athletes(display_name) VALUES('Lock Athlete Two ' || suffix) RETURNING id INTO ath2;
+  INSERT INTO public.athletes(display_name) VALUES('Lock Athlete Three ' || suffix) RETURNING id INTO ath3;
+  INSERT INTO public.athletes(display_name) VALUES('Lock Athlete Four ' || suffix) RETURNING id INTO ath4;
 
   ---------------------------------------------------------------------------
   -- 1. lock_strategy defaults, and is pinned to the market type.
@@ -76,10 +83,10 @@ BEGIN
   ---------------------------------------------------------------------------
   INSERT INTO public.markets(type, quarter, title, status, lock_strategy, opens_at, counts_toward_quarter_prize)
     VALUES('studs_v_spuds', 1, 'Studs Q1 slot 1', 'open', 'bounce', clock_timestamp(), true) RETURNING id INTO studs1;
-  INSERT INTO public.market_options(market_id, option_key, label, sort_order)
-    VALUES(studs1, 'stud', 'Athlete One', 0), (studs1, 'spud', 'Athlete Two', 1);
-  SELECT id INTO opt_a FROM public.market_options WHERE market_id = studs1 AND option_key = 'stud';
-  SELECT id INTO opt_b FROM public.market_options WHERE market_id = studs1 AND option_key = 'spud';
+  INSERT INTO public.market_options(market_id, option_key, label, sort_order, athlete_id)
+    VALUES(studs1, 'athlete_a', 'Athlete One', 0, ath1), (studs1, 'athlete_b', 'Athlete Two', 1, ath2);
+  SELECT id INTO opt_a FROM public.market_options WHERE market_id = studs1 AND option_key = 'athlete_a';
+  SELECT id INTO opt_b FROM public.market_options WHERE market_id = studs1 AND option_key = 'athlete_b';
 
   PERFORM public.kennel_place_bet(a_hash, studs1, opt_a, 100, gen_random_uuid());
   IF (SELECT pool_bones FROM public.market_options WHERE id = opt_a) <> 100 THEN
@@ -101,8 +108,8 @@ BEGIN
   ---------------------------------------------------------------------------
   INSERT INTO public.markets(type, quarter, title, status, lock_strategy, opens_at)
     VALUES('studs_v_spuds', 1, 'Studs Q1 slot 2', 'open', 'bounce', clock_timestamp()) RETURNING id INTO studs2;
-  INSERT INTO public.market_options(market_id, option_key, label, sort_order)
-    VALUES(studs2, 'stud', 'Athlete Three', 0), (studs2, 'spud', 'Athlete Four', 1);
+  INSERT INTO public.market_options(market_id, option_key, label, sort_order, athlete_id)
+    VALUES(studs2, 'athlete_a', 'Athlete Three', 0, ath3), (studs2, 'athlete_b', 'Athlete Four', 1, ath4);
   INSERT INTO public.markets(type, title, status, lock_strategy, opens_at, max_stake, counts_toward_quarter_prize)
     VALUES('futures_winner', 'Match winner', 'open', 'bounce', clock_timestamp(), 200, false) RETURNING id INTO futures;
   INSERT INTO public.market_options(market_id, option_key, label, sort_order)

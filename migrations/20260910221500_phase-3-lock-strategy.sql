@@ -23,15 +23,19 @@ ALTER TABLE public.markets ADD CONSTRAINT markets_lock_strategy_matches_type CHE
 DO $migration$
 DECLARE target text;
 BEGIN
-  SELECT c.conname INTO target
+  -- STRICT: fail loudly on zero or on more than one match, rather than dropping
+  -- an arbitrary constraint if the schema ever grows a second similar CHECK.
+  SELECT c.conname INTO STRICT target
   FROM pg_constraint c
   WHERE c.conrelid = 'public.markets'::regclass
     AND c.contype = 'c'
     AND pg_get_constraintdef(c.oid) LIKE '%locks_at > opens_at%';
-  IF target IS NULL THEN
-    RAISE EXCEPTION 'Could not find the markets open-window CHECK to replace';
-  END IF;
   EXECUTE format('ALTER TABLE public.markets DROP CONSTRAINT %I', target);
+EXCEPTION
+  WHEN NO_DATA_FOUND THEN
+    RAISE EXCEPTION 'Could not find the markets open-window CHECK to replace';
+  WHEN TOO_MANY_ROWS THEN
+    RAISE EXCEPTION 'Several markets CHECKs mention locks_at > opens_at; resolve by hand';
 END
 $migration$;
 
