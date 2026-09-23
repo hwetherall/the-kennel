@@ -37,7 +37,7 @@ export function PunterPage() {
       <OfflineBanner online={online} />
       <header className="topbar">
         <Link className="brand" to="/" aria-label="The Kennel home">
-          <span className="brand__mark" aria-hidden="true">DB</span>
+          <img className="brand__mark" src="/bulldogs-logo.png" alt="" />
           <span><strong>THE KENNEL</strong><small>Denver Bulldogs ARFC</small></span>
         </Link>
         {session ? (
@@ -219,7 +219,7 @@ function JoinDialog({
 export function LoadingScreen({ label }: { label: string }) {
   return (
     <div className="loading-screen" role="status">
-      <span className="brand__mark">DB</span>
+      <img className="brand__mark" src="/bulldogs-logo.png" alt="" />
       <strong>{label}</strong>
     </div>
   )

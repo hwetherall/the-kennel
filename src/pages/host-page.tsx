@@ -225,7 +225,7 @@ function HostLogin({ onLogin, error: initialError }: { onLogin: (session: HostSe
   return (
     <main className="host-login">
       <div className="host-login__card">
-        <span className="brand__mark">DB</span>
+        <img className="brand__mark" src="/bulldogs-logo.png" alt="" />
         <span className="eyebrow">Host only</span>
         <h1>Open the console.</h1>
         <p>One operator. Big buttons. Every score can be undone.</p>
