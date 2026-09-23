@@ -19,7 +19,7 @@ export function ScreenPage() {
     <main className="projector-shell">
       <OfflineBanner online={online} />
       <header className="projector-header">
-        <div className="brand brand--light"><span className="brand__mark">DB</span><span><strong>THE KENNEL</strong><small>Grand Final Night</small></span></div>
+        <div className="brand brand--light"><img className="brand__mark" src="/bulldogs-logo.png" alt="" /><span><strong>THE KENNEL</strong><small>Grand Final Night</small></span></div>
         <span>{snapshot.event.venue}</span>
         <Link to="/" aria-label="Open mobile view">Mobile view</Link>
       </header>
