@@ -4,14 +4,32 @@ export type PeriodStatus = 'pre_match' | 'live' | 'break' | 'final'
 
 export type MarketStatus = 'draft' | 'open' | 'locked' | 'settled' | 'void'
 
+export type MarketType = 'next_goal' | 'studs_v_spuds' | 'futures_winner' | 'futures_norm_smith'
+export type StudsStat = 'disposals' | 'hitouts'
+
 export interface MarketOption {
   id: string
   marketId: string
-  optionKey: TeamSide
+  /** 'home' | 'away' for team markets, 'athlete_a' | 'athlete_b' for Studs, 'athlete:<id>' or 'any_other_player' for Norm Smith. */
+  optionKey: string
   label: string
   poolBones: number
   sortOrder: number
   betCount: number
+  teamLabel?: string | null
+}
+
+export interface StudsReading {
+  matchupId: string
+  slot: number
+  roundLabel: string
+  stat: StudsStat
+  baselineA: number | null
+  baselineB: number | null
+  endingA: number | null
+  endingB: number | null
+  quarterA: number | null
+  quarterB: number | null
 }
 
 export interface SettlementSummary {
@@ -23,10 +41,11 @@ export interface SettlementSummary {
 export interface MarketSummary {
   id: string
   sequence: number
-  type: 'next_goal'
-  quarter: number
+  type: MarketType
+  quarter: number | null
   title: string
   status: MarketStatus
+  lockStrategy?: 'deadline' | 'bounce'
   opensAt: string | null
   locksAt: string | null
   settledAt: string | null
@@ -39,6 +58,7 @@ export interface MarketSummary {
   totalPoolBones: number
   settlement: SettlementSummary | null
   options: MarketOption[]
+  studs?: StudsReading | null
 }
 
 export interface PlayerMarketPosition {
@@ -114,7 +134,15 @@ export interface QuarterResult {
   winningSquareId: number
   winnerLabel: string | null
   settledAt: string
+  ladderFinalizedAt?: string | null
   quarterLadder: LadderEntry[]
+}
+
+export interface BoardName {
+  purchaseId: string
+  name: string
+  squaresCount: number
+  claimed: boolean
 }
 
 export interface PublicSnapshot {
@@ -126,6 +154,9 @@ export interface PublicSnapshot {
   quarterResults: QuarterResult[]
   activeMarket: MarketSummary | null
   recentMarket: MarketSummary | null
+  /** Both Futures and every opened Studs matchup. */
+  kennelMarkets: MarketSummary[]
+  boardNames: BoardName[]
   quarterLadder: LadderEntry[]
   topDogLadder: LadderEntry[]
 }
@@ -150,13 +181,46 @@ export interface PlayerSnapshot extends PublicSnapshot {
   player: PlayerSummary & { quarterRank: number | null; topDogRank: number | null }
   ownedSquareIds: number[]
   activeBet: PlayerMarketPosition | null
+  /** One position per Futures or Studs market. */
+  positions: PlayerMarketPosition[]
   recentActivity: LedgerEntry[]
+}
+
+export interface Athlete {
+  id: string
+  name: string
+  team: string | null
+}
+
+export interface StudsMatchup {
+  id: string
+  quarter: number
+  slot: number
+  roundLabel: string
+  stat: StudsStat
+  athleteAId: string
+  athleteAName: string
+  athleteATeam: string | null
+  athleteBId: string
+  athleteBName: string
+  athleteBTeam: string | null
+  baselineA: number | null
+  baselineB: number | null
+  endingA: number | null
+  endingB: number | null
+  marketId: string | null
+  marketStatus: MarketStatus | null
+  resolvedAt: string | null
 }
 
 export interface HostSnapshot extends PublicSnapshot {
   markets: MarketSummary[]
   players: PlayerSummary[]
   purchases: PurchaseSummary[]
+  athletes: Athlete[]
+  studsMatchups: StudsMatchup[]
+  /** Both Futures, including drafts. */
+  futures: MarketSummary[]
 }
 
 export interface PlayerSession {

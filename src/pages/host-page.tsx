@@ -1,4 +1,5 @@
 import { HostMarkets } from '../components/host-markets'
+import { HostFutures, HostStuds } from '../components/host-kennel'
 import { QuarterResults } from '../components/quarter-results'
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -11,6 +12,7 @@ import {
   pendingHostMutation,
   marketAction,
   hostLogin,
+  kennelHostAction,
   linkPurchase,
   recordScore,
   setGrid,
@@ -189,6 +191,10 @@ export function HostPage() {
         <QuarterResults results={snapshot.quarterResults} />
         <HostMarkets key={snapshot.activeMarket?.id ?? 'none'} snapshot={snapshot} disabled={Boolean(busy) || Boolean(pending) || !online}
           onAction={(action, payload) => void act(action, (key) => marketAction(session.token, action, payload, key))} />
+        <HostStuds snapshot={snapshot} disabled={Boolean(busy) || Boolean(pending) || !online}
+          onAction={(label, action, payload) => void act(label, (key) => kennelHostAction(session.token, action, payload, key))} />
+        <HostFutures key={snapshot.futures.map((m) => m.options.length).join('-')} snapshot={snapshot} disabled={Boolean(busy) || Boolean(pending) || !online}
+          onAction={(label, action, payload) => void act(label, (key) => kennelHostAction(session.token, action, payload, key))} />
         <PurchaseLinker
           disabled={(Boolean(busy) || Boolean(pending)) || !online}
           snapshot={snapshot}

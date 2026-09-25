@@ -56,6 +56,8 @@ let state: PublicSnapshot = {
   quarterResults: [],
   activeMarket: null,
   recentMarket: null,
+  kennelMarkets: [],
+  boardNames: [],
   quarterLadder: [],
   topDogLadder: [],
 }
@@ -63,7 +65,7 @@ let state: PublicSnapshot = {
 // Synthetic, local-only simulator. Production always uses the edge API.
 type DemoBet = PlayerMarketPosition & { playerId: string }
 type DemoScore = { game: PublicSnapshot['game']; settledId?: string; openedSequence?: number }
-const storageKey = 'kennel-demo-phase-two-v2'
+const storageKey = 'kennel-demo-grand-final-v3'
 const initialState = structuredClone(state)
 let markets: MarketSummary[] = []
 let players: Record<string, PlayerSummary> = {}
@@ -143,12 +145,13 @@ export function demoPlayerSnapshot(token: string): PlayerSnapshot {
   return structuredClone({ ...snapshot, quarterLadder, topDogLadder,
     player: { ...player, quarterRank: quarterLadder.find((p) => p.isMe)?.rank ?? null, topDogRank: topDogLadder.find((p) => p.isMe)?.rank ?? null },
     ownedSquareIds: [1, 53], activeBet: bets.find((b) => b.playerId === player.id && b.marketId === snapshot.activeMarket?.id) ?? null,
-    recentActivity: activity[player.id].slice(0, 20),
+    positions: [], recentActivity: activity[player.id].slice(0, 20),
   })
 }
 export function demoHostSnapshot(): HostSnapshot {
   return structuredClone({ ...demoPublicSnapshot(), markets: markets.slice().reverse().map(effective),
-    players: Object.values(players), purchases: [], quarterLadder: ladder(state.game.quarter), topDogLadder: ladder() })
+    players: Object.values(players), purchases: [], athletes: [], studsMatchups: [], futures: [],
+    quarterLadder: ladder(state.game.quarter), topDogLadder: ladder() })
 }
 function openMarket() {
   if (state.game.periodStatus !== 'live') throw new Error('Start a quarter before opening a market')
@@ -260,7 +263,7 @@ export function demoEndQuarter() {
   const squareId = winningSquareId(state.game.homePoints, state.game.awayPoints, state.grid)!
   state.quarterResults.push({ quarter: state.game.quarter, homePoints: state.game.homePoints, awayPoints: state.game.awayPoints,
     winningSquareId: squareId, winnerLabel: state.squares.find((s) => s.id === squareId)?.ownerLabel ?? null,
-    settledAt: now(), quarterLadder: ladder(state.game.quarter) })
+    settledAt: now(), ladderFinalizedAt: now(), quarterLadder: ladder(state.game.quarter) })
   state.game.periodStatus = state.game.quarter === 4 ? 'final' : 'break'; state.game.canUndo = false; scores = []
 }
 export function demoSetGrid(homeTeam: string, awayTeam: string, nextGrid: GridConfig) {

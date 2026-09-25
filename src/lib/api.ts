@@ -140,9 +140,10 @@ export async function joinPlayer(
   nickname: string,
   claimEmail: string,
   sessionToken: string,
+  purchaseId: string | null = null,
 ) {
   if (!backendConfigured) return demoPlayerSnapshot(sessionToken)
-  return invoke<PlayerSnapshot>('join', { nickname, claimEmail, sessionToken })
+  return invoke<PlayerSnapshot>('join', { nickname, claimEmail, sessionToken, purchaseId })
 }
 
 export async function getPlayerSnapshot(playerToken: string) {
@@ -253,5 +254,15 @@ export async function marketAction(hostToken: string, action: MarketAction,
     demoMutation(idempotencyKey, () => demoMarketAction(action, payload))
     return demoHostSnapshot()
   }
+  return invoke<HostSnapshot>(action, payload, { hostToken, idempotencyKey })
+}
+
+/** Studs v Spuds and Futures host actions. The local demo does not simulate them. */
+export type KennelHostAction =
+  | 'ensure_athletes' | 'configure_studs_matchup' | 'open_studs' | 'set_studs_baselines' | 'settle_studs' | 'void_studs'
+  | 'configure_futures' | 'open_futures' | 'settle_match_future' | 'settle_norm_smith' | 'void_future'
+export async function kennelHostAction(hostToken: string, action: KennelHostAction, payload: Record<string, unknown>,
+  idempotencyKey: string) {
+  if (!backendConfigured) throw new Error('Studs v Spuds and Futures need the live backend')
   return invoke<HostSnapshot>(action, payload, { hostToken, idempotencyKey })
 }

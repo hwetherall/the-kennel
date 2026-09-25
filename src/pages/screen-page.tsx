@@ -14,6 +14,8 @@ export function ScreenPage() {
   if (!snapshot) return <div className="screen-error">{error}<button onClick={() => void refresh()}>Try again</button></div>
 
   const latest = snapshot.quarterResults.slice().sort((a, b) => b.quarter - a.quarter)[0]
+  // During a break the room is backing the coming quarter's Studs matchups.
+  const openStuds = (snapshot.kennelMarkets ?? []).filter((market) => market.type === 'studs_v_spuds' && market.status === 'open')
 
   return (
     <main className="projector-shell">
@@ -43,7 +45,9 @@ export function ScreenPage() {
         <aside className="projector-sidebar">
           <QuarterResults results={snapshot.quarterResults} />
           <section className="next-up-card">
-            {snapshot.activeMarket ? <MarketSummaryCard market={snapshot.activeMarket} serverNow={snapshot.serverNow} /> : <p>Next Goal opens when play resumes.</p>}
+            {snapshot.activeMarket ? <MarketSummaryCard market={snapshot.activeMarket} serverNow={snapshot.serverNow} />
+              : openStuds.length > 0 ? openStuds.map((market) => <MarketSummaryCard key={market.id} market={market} serverNow={snapshot.serverNow} />)
+                : <p>Next Goal opens when play resumes.</p>}
             <small>Bones have no cash value.</small>
           </section>
           <Ladder title={snapshot.game.periodStatus === 'final' ? 'Top Dog · final' : `Q${snapshot.game.quarter} · top five`}

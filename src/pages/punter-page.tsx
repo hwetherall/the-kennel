@@ -9,7 +9,7 @@ import { SquaresGrid } from '../components/squares-grid'
 import { useLiveSnapshot } from '../hooks/use-live-snapshot'
 import { backendConfigured, joinPlayer } from '../lib/api'
 import { clearPlayerSession, getPlayerSession, newOpaqueToken, savePlayerSession } from '../lib/session'
-import type { PlayerSession, PlayerSnapshot } from '../types'
+import type { BoardName, PlayerSession, PlayerSnapshot } from '../types'
 
 type Tab = 'squares' | 'kennel' | 'ladder'
 
@@ -123,13 +123,16 @@ export function PunterPage() {
           <p>Rankings use settled net profit, never balance or total stakes.</p>
           <Ladder title={`Q${snapshot.game.quarter} ladder`} entries={snapshot.quarterLadder} />
           <Ladder title={snapshot.game.periodStatus === 'final' ? 'Top Dog · final' : 'Top Dog · provisional'} entries={snapshot.topDogLadder} />
-          {snapshot.quarterResults.map((result) => <Ladder key={result.quarter} title={`Q${result.quarter} · final standings`} entries={result.quarterLadder} playerId={playerSnapshot?.player.id} />)}
+          {snapshot.quarterResults.map((result) => <Ladder key={result.quarter}
+            title={result.ladderFinalizedAt === null ? `Q${result.quarter} · awaiting Studs results` : `Q${result.quarter} · final standings`}
+            entries={result.quarterLadder} playerId={playerSnapshot?.player.id} />)}
         </div>}
 
       </main>
 
       {joinOpen && (
         <JoinDialog
+          boardNames={snapshot?.boardNames ?? []}
           online={online}
           onClose={() => session && setJoinOpen(false)}
           onJoined={(nextSession) => {
@@ -143,31 +146,38 @@ export function PunterPage() {
   )
 }
 
-function JoinDialog({
+export function JoinDialog({
+  boardNames,
   online,
   onClose,
   onJoined,
 }: {
+  boardNames: BoardName[]
   online: boolean
   onClose: () => void
   onJoined: (session: PlayerSession) => void
 }) {
+  const [onBoard, setOnBoard] = useState(boardNames.length > 0)
+  const [search, setSearch] = useState('')
+  const [chosen, setChosen] = useState<BoardName | null>(null)
   const [nickname, setNickname] = useState('')
-  const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const joinToken = useRef(newOpaqueToken())
+  const matches = boardNames.filter((entry) => entry.name.toLowerCase().includes(search.trim().toLowerCase()))
 
   async function submit(event: React.FormEvent) {
     event.preventDefault()
+    const name = onBoard ? chosen?.name : nickname.trim()
+    if (!name) return
     setBusy(true)
     setError(null)
     const randomToken = joinToken.current
-    const token = backendConfigured ? randomToken : `${nickname.trim()}:${randomToken}`
+    const token = backendConfigured ? randomToken : `${name}:${randomToken}`
     try {
-      await joinPlayer(nickname.trim(), email.trim(), token)
-      onJoined({ token, nickname: nickname.trim() })
+      const joined = await joinPlayer(onBoard ? '' : name, '', token, onBoard ? chosen!.purchaseId : null)
+      onJoined({ token, nickname: joined.player.nickname })
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not join')
     } finally {
@@ -181,35 +191,39 @@ function JoinDialog({
         <button className="dialog-close" onClick={onClose} aria-label="Close join form">×</button>
         <span className="eyebrow">Welcome to the watch party</span>
         <h1 id="join-title">Join the pack.</h1>
-        <p>Pick a nickname. No password, no app download.</p>
         <form onSubmit={submit}>
-          <label>
-            Nickname
-            <input
-              autoFocus
-              maxLength={24}
-              minLength={2}
-              onChange={(event) => setNickname(event.target.value)}
-              placeholder="e.g. Macca"
-              required
-              value={nickname}
-            />
-          </label>
-          <label>
-            Zeffy email <span>optional</span>
-            <input
-              autoComplete="email"
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="Used to match your squares"
-              type="email"
-              value={email}
-            />
-          </label>
+          {onBoard ? <>
+            <p>Find your name on the squares board. Your squares and bonus Bones come with it.</p>
+            <label>
+              Your name
+              <input autoFocus onChange={(event) => { setSearch(event.target.value); setChosen(null) }}
+                placeholder="Start typing your name" value={search} />
+            </label>
+            <div className="board-name-list" role="listbox" aria-label="Names on the squares board">
+              {matches.map((entry) => <button type="button" role="option" key={entry.purchaseId}
+                aria-selected={chosen?.purchaseId === entry.purchaseId} disabled={entry.claimed}
+                className={chosen?.purchaseId === entry.purchaseId ? 'board-name board-name--chosen' : 'board-name'}
+                onClick={() => setChosen(entry)}>
+                <strong>{entry.name}</strong>
+                <span>{entry.claimed ? 'Already joined' : `${entry.squaresCount} square${entry.squaresCount === 1 ? '' : 's'}`}</span>
+              </button>)}
+              {matches.length === 0 && <p className="muted-note">No name matches. Check the spelling, or join with a nickname below.</p>}
+            </div>
+            <button type="button" className="link-button" onClick={() => setOnBoard(false)}>Not on the board? Pick a nickname</button>
+          </> : <>
+            <p>Pick a nickname. No password, no app download.</p>
+            <label>
+              Nickname
+              <input autoFocus maxLength={24} minLength={2} onChange={(event) => setNickname(event.target.value)}
+                placeholder="e.g. Macca" required value={nickname} />
+            </label>
+            {boardNames.length > 0 && <button type="button" className="link-button" onClick={() => setOnBoard(true)}>On the squares board? Find your name</button>}
+          </>}
           {error && <div className="form-error" role="alert">{error}</div>}
-          <button className="button button--wide button--gold" disabled={busy || !online} type="submit">
-            {busy ? 'Joining…' : 'Enter The Kennel'}
+          <button className="button button--wide button--gold" disabled={busy || !online || (onBoard && !chosen)} type="submit">
+            {busy ? 'Joining…' : onBoard && chosen ? `Enter as ${chosen.name}` : 'Enter The Kennel'}
           </button>
-          <small>Your email is only used to match a Zeffy purchase. The app does not handle money.</small>
+          <small>The app never handles money. Bones have no cash value.</small>
         </form>
       </div>
     </div>
