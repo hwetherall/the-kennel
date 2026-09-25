@@ -13,7 +13,7 @@ const AWAY_TEAM = 'Brisbane'
 // Norm Smith shortlist, in the order of the club's odds sheet. "Any other player"
 // is added by the server.
 const NORM_SMITH = [
-  ['Will Ashcroft', 'BRI'], ['Luke Jackson', 'FRE'], ['Zac Bailey', 'BRI'], ['Caleb Serong', 'FRE'],
+  ['Will Ashcroft', 'BRI'], ['Lachie Neale', 'BRI'], ['Luke Jackson', 'FRE'], ['Zac Bailey', 'BRI'], ['Caleb Serong', 'FRE'],
   ['Hugh McCluggage', 'BRI'], ['Andrew Brayshaw', 'FRE'], ['Dayne Zorko', 'BRI'], ['Shai Bolton', 'FRE'],
   ['Hayden Young', 'FRE'], ['Josh Dunkley', 'BRI'],
 ]
