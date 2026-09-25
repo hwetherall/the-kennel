@@ -5,3 +5,5 @@ tests/
 coverage/
 playwright-report/
 test-results/
+*.csv
+norm_smith_odds.md

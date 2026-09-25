@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "import:squares": "node --env-file=.env.local scripts/import-squares.mjs"
+    "import:squares": "node --env-file=.env.local scripts/import-squares.mjs",
+    "import:grid": "node --env-file=.env.local scripts/import-grid.mjs",
+    "score-feed": "node scripts/score-feed.mjs"
   },
   "dependencies": {
     "@insforge/sdk": "^1.5.2",

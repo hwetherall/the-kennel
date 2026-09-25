@@ -5,7 +5,7 @@ export function PoolSplit({ market }: { market: MarketSummary }) {
     {market.options.map((option) => {
       const percent = market.totalPoolBones ? Math.round(option.poolBones / market.totalPoolBones * 100) : 0
       return <div key={option.id} className="pool-option">
-        <div><strong>{option.label}</strong><span>{option.poolBones.toLocaleString()} Bones · {percent}%</span></div>
+        <div><strong>{option.label}{option.teamLabel && <small> {option.teamLabel}</small>}</strong><span>{option.poolBones.toLocaleString()} Bones · {percent}%</span></div>
         <progress max={100} value={percent} aria-label={`${option.label} pool share`} />
       </div>
     })}
