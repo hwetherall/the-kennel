@@ -82,3 +82,11 @@ it('joins by picking an unclaimed board name', async () => {
   await vi.waitFor(() => expect(onJoined).toHaveBeenCalledWith(expect.objectContaining({ nickname: 'Taylor McHale' })))
   expect(vi.mocked(joinPlayer).mock.calls[0][3]).toBe('p1')
 })
+
+it('switches to the name list when board names arrive after the dialog opened', () => {
+  const view = render(<JoinDialog online onClose={vi.fn()} onJoined={vi.fn()} boardNames={[]} />)
+  expect(screen.getByLabelText('Nickname')).toBeVisible()
+  view.rerender(<JoinDialog online onClose={vi.fn()} onJoined={vi.fn()}
+    boardNames={[{ purchaseId: 'p1', name: 'Taylor McHale', squaresCount: 5, claimed: false }]} />)
+  expect(screen.getByRole('option', { name: /Taylor McHale/ })).toBeVisible()
+})

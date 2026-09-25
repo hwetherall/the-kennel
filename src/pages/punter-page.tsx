@@ -157,7 +157,10 @@ export function JoinDialog({
   onClose: () => void
   onJoined: (session: PlayerSession) => void
 }) {
-  const [onBoard, setOnBoard] = useState(boardNames.length > 0)
+  // Follows the board names as they load, until the guest picks a mode themselves.
+  const [mode, setMode] = useState<'board' | 'nickname' | null>(null)
+  const onBoard = mode ? mode === 'board' : boardNames.length > 0
+  const setOnBoard = (board: boolean) => setMode(board ? 'board' : 'nickname')
   const [search, setSearch] = useState('')
   const [chosen, setChosen] = useState<BoardName | null>(null)
   const [nickname, setNickname] = useState('')

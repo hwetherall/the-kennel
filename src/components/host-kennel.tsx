@@ -50,9 +50,9 @@ function StudsQuarter({ quarter, snapshot, disabled, onAction }: { quarter: numb
       <label>Round<input value={round} maxLength={40} disabled={disabled} placeholder="e.g. Ruck Round" onChange={(e) => setRound(e.target.value)} /></label>
       <label>Stat<select value={stat} disabled={disabled} onChange={(e) => setStat(e.target.value)}>
         <option value="disposals">Disposals</option><option value="hitouts">Hit-outs</option></select></label>
-      <label>Stud (A)<select value={a} disabled={disabled} onChange={(e) => setA(e.target.value)}>
+      <label>Player A<select value={a} disabled={disabled} onChange={(e) => setA(e.target.value)}>
         <option value="">Choose</option>{snapshot.athletes.map((x) => <option key={x.id} value={x.id}>{x.name}{x.team ? ` (${x.team})` : ''}</option>)}</select></label>
-      <label>Spud (B)<select value={b} disabled={disabled} onChange={(e) => setB(e.target.value)}>
+      <label>Player B<select value={b} disabled={disabled} onChange={(e) => setB(e.target.value)}>
         <option value="">Choose</option>{snapshot.athletes.map((x) => <option key={x.id} value={x.id}>{x.name}{x.team ? ` (${x.team})` : ''}</option>)}</select></label>
       <button className="button" disabled={disabled || !slot || !a || !b || a === b || !round.trim()}
         onClick={() => onAction('save matchup', 'configure_studs_matchup', { quarter, slot: Number(slot), roundLabel: round.trim(), stat, athleteAId: a, athleteBId: b })}>
