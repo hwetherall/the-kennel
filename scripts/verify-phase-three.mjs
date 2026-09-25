@@ -13,11 +13,13 @@ const MIGRATIONS = [
   'migrations/20260910221500_phase-3-lock-strategy.sql',
   'migrations/20260916120000_phase-3-athletes-and-futures.sql',
   'migrations/20260916140000_phase-3-futures.sql',
+  'migrations/20260924200000_grand-final-studs-and-board.sql',
 ]
 const SUITES = [
   ['tests/backend/phase-three-lock-strategy.sql', 'PHASE_THREE_LOCK_ASSERTIONS_PASSED_ROLLED_BACK'],
   ['tests/backend/phase-three-athletes-futures.sql', 'PHASE_THREE_ATHLETES_ASSERTIONS_PASSED_ROLLED_BACK'],
   ['tests/backend/phase-three-futures.sql', 'PHASE_THREE_FUTURES_ASSERTIONS_PASSED_ROLLED_BACK'],
+  ['tests/backend/grand-final-studs.sql', 'GRAND_FINAL_STUDS_ASSERTIONS_PASSED_ROLLED_BACK'],
 ]
 
 const project = JSON.parse(readFileSync('.insforge/project.json', 'utf8'))
@@ -33,7 +35,7 @@ assert.equal(project.oss_host, `https://${branch.appkey}.${branch.region}.insfor
 // indistinguishable from an assertion failure.
 const PRESENCE_QUERY = `SELECT
   (SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'markets' AND column_name = 'lock_strategy')
-  + (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'athletes') AS present`
+  + (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('athletes', 'studs_matchups')) AS present`
 
 function presentCount() {
   const probe = spawnSync('npx', ['-y', '@insforge/cli', 'db', 'query', '--json', '--', PRESENCE_QUERY], { encoding: 'utf8' })
