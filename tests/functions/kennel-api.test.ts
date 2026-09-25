@@ -143,3 +143,49 @@ it('bounds capacity retries and returns a safe retryable error', async () => {
   expect(databaseRpc).toHaveBeenCalledTimes(6)
   expect(await response.text()).not.toContain('clients')
 })
+
+describe('Grand Final edge boundary', () => {
+  const purchaseId = '44444444-4444-4444-8444-444444444444'
+  const matchupId = '55555555-5555-4555-8555-555555555555'
+  const host = { 'X-Host-Token': 'h'.repeat(64), 'Idempotency-Key': key }
+
+  it('joins by board name without a typed nickname and hashes the session', async () => {
+    const response = await request({ action: 'join', purchaseId, sessionToken: token })
+    expect(response.status).toBe(200)
+    expect(databaseRpc).toHaveBeenCalledWith('kennel_join_player', {
+      p_nickname: '', p_claim_email: '', p_token_hash: expect.stringMatching(/^[a-f0-9]{64}$/), p_purchase_id: purchaseId,
+    })
+  })
+
+  it('still requires a nickname for a guest who is not on the board', async () => {
+    const response = await request({ action: 'join', sessionToken: token })
+    expect(response.status).toBe(400)
+    expect(databaseRpc).not.toHaveBeenCalled()
+  })
+
+  it('forwards cumulative Studs totals and rejects non-integers before the database', async () => {
+    expect((await request({ action: 'settle_studs', matchupId, endingA: 12, endingB: 9 }, host)).status).toBe(200)
+    expect(databaseRpc).toHaveBeenCalledWith('kennel_settle_studs', expect.objectContaining({
+      p_matchup_id: matchupId, p_ending_a: 12, p_ending_b: 9, p_request_id: key,
+    }))
+    databaseRpc.mockClear()
+    expect((await request({ action: 'settle_studs', matchupId, endingA: 4.5, endingB: 9 }, host)).status).toBe(400)
+    expect(databaseRpc).not.toHaveBeenCalled()
+  })
+
+  it('passes a deliberate Studs rule error through and hides anything else', async () => {
+    databaseRpc.mockResolvedValueOnce({ data: null, error: { message: 'A cumulative total cannot be lower than its baseline' } })
+    const known = await request({ action: 'settle_studs', matchupId, endingA: 1, endingB: 1 }, host)
+    expect(await known.json()).toEqual({ error: 'A cumulative total cannot be lower than its baseline' })
+    databaseRpc.mockResolvedValueOnce({ data: null, error: { message: 'relation "studs_matchups" does not exist' } })
+    const unknown = await request({ action: 'settle_studs', matchupId, endingA: 1, endingB: 1 }, host)
+    expect(unknown.status).toBe(500)
+    expect(JSON.stringify(await unknown.json())).not.toContain('studs_matchups')
+  })
+
+  it('settles Norm Smith only with a valid option id', async () => {
+    expect((await request({ action: 'settle_norm_smith', winningOptionId: 'nope' }, host)).status).toBe(400)
+    expect((await request({ action: 'settle_norm_smith', winningOptionId: optionId }, host)).status).toBe(200)
+    expect(databaseRpc).toHaveBeenCalledWith('kennel_settle_norm_smith', expect.objectContaining({ p_winning_option_id: optionId }))
+  })
+})

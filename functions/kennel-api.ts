@@ -29,6 +29,26 @@ const publicErrors = new Set([
   'Market is already settled or void', 'Market has locked', 'Betting is paused',
   'Stake must be positive', 'Existing selection cannot be changed', 'Market cap reached',
   'Not enough Bones', 'Choose the scoring team', 'A short void reason is required',
+  // Futures
+  'Futures can only be configured before the first bounce', 'A stake cap must be a positive number of Bones',
+  'Name at least one Norm Smith candidate', 'A candidate can only be listed once', 'Unknown Norm Smith candidate',
+  'The match-winner Future is already open and cannot be reconfigured', 'The match-winner Future already carries stakes',
+  'The Norm Smith Future is already open and cannot be reconfigured', 'The Norm Smith Future already carries stakes',
+  'Futures open before the first bounce only', 'Configure both Futures before opening them',
+  'This Future can no longer be opened', 'This Future needs at least two options',
+  'Norm Smith must offer Any other player', 'Seal full time before settling the Futures',
+  'There is no match-winner Future', 'There is no Norm Smith Future', 'Choose the medal recipient',
+  'Choose a candidate from this market', 'This market has its own host action',
+  'A bounce-locked market cannot be open during live play', 'Lock every bounce-locked market before play resumes',
+  // Studs v Spuds and joining by board name
+  'An athlete name is required', 'A matchup needs a quarter from 1 to 4 and a slot from 1 to 3',
+  'Studs matchups can only change before they open', 'Choose two different athletes', 'Unknown athlete',
+  'Choose disposals or hit-outs', 'A round label is required',
+  'Studs matchups open during a break or before the first bounce', 'Matchup not found',
+  'This matchup is already resolved', 'Q1 baselines are zero', 'Totals must be whole numbers of zero or more',
+  'This matchup never opened', 'Settle this matchup after its quarter siren', "Enter this matchup's baselines first",
+  'A cumulative total cannot be lower than its baseline', 'That name has already been claimed',
+  'That name is on the squares board. Pick it from the list.',
 ]);
 
 function resourceId(value: unknown, label: string) {
@@ -144,7 +164,10 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     if (action === 'join') {
-      const nickname = requiredString(body.nickname, 'Nickname', 24);
+      // A board name is claimed by its purchase; everyone else picks a nickname.
+      const purchaseId = body.purchaseId === undefined || body.purchaseId === null
+        ? null : resourceId(body.purchaseId, 'Board name');
+      const nickname = purchaseId ? optionalString(body.nickname, 24) : requiredString(body.nickname, 'Nickname', 24);
       const claimEmail = optionalString(body.claimEmail);
       const sessionToken = requiredString(body.sessionToken, 'Session token', 160);
       if (sessionToken.length < 32) throw new RequestError('Invalid session token');
@@ -153,6 +176,7 @@ export default async function handler(req: Request): Promise<Response> {
           p_nickname: nickname,
           p_claim_email: claimEmail,
           p_token_hash: await sha256(sessionToken),
+          p_purchase_id: purchaseId,
         }),
       });
     }
@@ -249,6 +273,78 @@ export default async function handler(req: Request): Promise<Response> {
           p_col_digits: colDigits,
         }) });
       }
+      case 'ensure_athletes': {
+        const athletes = body.athletes;
+        if (!Array.isArray(athletes) || athletes.length === 0 || athletes.length > 100) {
+          throw new RequestError('An athlete name is required');
+        }
+        return json({ data: await rpc(backend, 'kennel_ensure_athletes', {
+          ...common,
+          p_athletes: athletes.map((entry) => {
+            const record = (entry && typeof entry === 'object' ? entry : {}) as JsonRecord;
+            return { name: requiredString(record.name, 'Athlete name', 80), team: optionalString(record.team, 40) };
+          }),
+        }) });
+      }
+      case 'configure_studs_matchup': {
+        const remove = body.athleteAId === null;
+        return json({ data: await rpc(backend, 'kennel_configure_studs_matchup', {
+          ...common,
+          p_quarter: integer(body.quarter, 'Quarter', 1, 4),
+          p_slot: integer(body.slot, 'Slot', 1, 3),
+          p_round_label: remove ? null : requiredString(body.roundLabel, 'Round label', 40),
+          p_stat: remove ? null : requiredString(body.stat, 'Stat', 20),
+          p_athlete_a_id: remove ? null : resourceId(body.athleteAId, 'Athlete'),
+          p_athlete_b_id: remove ? null : resourceId(body.athleteBId, 'Athlete'),
+        }) });
+      }
+      case 'open_studs':
+        return json({ data: await rpc(backend, 'kennel_open_studs', common) });
+      case 'set_studs_baselines':
+        return json({ data: await rpc(backend, 'kennel_set_studs_baselines', {
+          ...common,
+          p_matchup_id: resourceId(body.matchupId, 'Matchup'),
+          p_baseline_a: integer(body.baselineA, 'Baseline', 0, 1000),
+          p_baseline_b: integer(body.baselineB, 'Baseline', 0, 1000),
+        }) });
+      case 'settle_studs':
+        return json({ data: await rpc(backend, 'kennel_settle_studs', {
+          ...common,
+          p_matchup_id: resourceId(body.matchupId, 'Matchup'),
+          p_ending_a: integer(body.endingA, 'Total', 0, 1000),
+          p_ending_b: integer(body.endingB, 'Total', 0, 1000),
+        }) });
+      case 'void_studs':
+        return json({ data: await rpc(backend, 'kennel_void_studs', {
+          ...common,
+          p_matchup_id: resourceId(body.matchupId, 'Matchup'),
+          p_reason: requiredString(body.reason, 'Void reason', 200),
+        }) });
+      case 'configure_futures': {
+        const candidateIds = body.candidateIds;
+        if (!Array.isArray(candidateIds) || candidateIds.length > 40) throw new RequestError('Name at least one Norm Smith candidate');
+        return json({ data: await rpc(backend, 'kennel_configure_futures', {
+          ...common,
+          p_match_max_stake: integer(body.matchMaxStake ?? 200, 'Match stake cap', 1, 1000000),
+          p_norm_max_stake: integer(body.normSmithMaxStake ?? 200, 'Norm Smith stake cap', 1, 1000000),
+          p_candidate_ids: candidateIds.map((id) => resourceId(id, 'Candidate')),
+        }) });
+      }
+      case 'open_futures':
+        return json({ data: await rpc(backend, 'kennel_open_futures', common) });
+      case 'settle_match_future':
+        return json({ data: await rpc(backend, 'kennel_settle_match_future', common) });
+      case 'settle_norm_smith':
+        return json({ data: await rpc(backend, 'kennel_settle_norm_smith', {
+          ...common,
+          p_winning_option_id: resourceId(body.winningOptionId, 'Winning option'),
+        }) });
+      case 'void_future':
+        return json({ data: await rpc(backend, 'kennel_void_future', {
+          ...common,
+          p_market_id: resourceId(body.marketId, 'Market'),
+          p_reason: requiredString(body.reason, 'Void reason', 200),
+        }) });
       case 'link_purchase':
         return json({ data: await rpc(backend, 'kennel_link_purchase', {
           ...common,

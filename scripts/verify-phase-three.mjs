@@ -23,7 +23,9 @@ const SUITES = [
 ]
 
 const project = JSON.parse(readFileSync('.insforge/project.json', 'utf8'))
-assert.equal(process.argv.length, 2, 'This verification takes no arguments')
+// --applied runs the same suites against a branch that already carries the migrations.
+const applied = process.argv.includes('--applied')
+assert(process.argv.slice(2).every((arg) => arg === '--applied'), 'Unknown verification argument')
 const { data: branches } = JSON.parse(execFileSync('npx', ['-y', '@insforge/cli', 'branch', 'list', '--json'], { encoding: 'utf8' }))
 const branch = branches.find((entry) => entry.id === project.project_id)
 assert(branch?.branch_state === 'ready', 'Switch to a ready development backend branch')
@@ -42,9 +44,10 @@ function presentCount() {
   return Number(JSON.parse(probe.stdout).rows?.[0]?.present ?? -1)
 }
 
-assert.equal(presentCount(), 0, 'A Phase 3 migration is already applied; this script only verifies unapplied migrations')
+if (applied) assert.equal(presentCount(), 3, 'Apply every Phase 3 migration before running with --applied')
+else assert.equal(presentCount(), 0, 'A Phase 3 migration is already applied; run with --applied')
 
-const migration = MIGRATIONS.map((path) => readFileSync(path, 'utf8')).join('\n')
+const migration = applied ? '' : MIGRATIONS.map((path) => readFileSync(path, 'utf8')).join('\n')
 
 function runSuite(suitePath, expected) {
   const result = spawnSync('npx', ['-y', '@insforge/cli', 'db', 'query', '--json', '--',
@@ -68,6 +71,6 @@ for (const suite of ['tests/backend/phase-two.sql', 'tests/backend/phase-two-und
 }
 
 // The rollback is the whole point, so prove it rather than trust it.
-assert.equal(presentCount(), 0, 'The migrations did not roll back')
+if (!applied) assert.equal(presentCount(), 0, 'The migrations did not roll back')
 
 console.log(`Phase 3 assertions passed (${SUITES.length} suites), Phase 2 suites still pass on the migrated schema; all rolled back.`)
