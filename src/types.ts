@@ -221,6 +221,19 @@ export interface HostSnapshot extends PublicSnapshot {
   studsMatchups: StudsMatchup[]
   /** Both Futures, including drafts. */
   futures: MarketSummary[]
+  /** The live feed's latest reading, if the feed script is running. */
+  scoreFeed?: ScoreFeed | null
+}
+
+export interface ScoreFeed {
+  sourceGameId: number
+  homeGoals: number
+  homeBehinds: number
+  awayGoals: number
+  awayBehinds: number
+  timeLabel: string | null
+  complete: number | null
+  receivedAt: string
 }
 
 export interface PlayerSession {

@@ -28,7 +28,7 @@ These are not preferences. If a task appears to require breaking one, stop and a
 4. **All balance and pool mutations happen server-side.** The client submits an intent ("stake 50 on option X"); the server validates, mutates, and returns truth. The client never computes or writes a balance.
 5. **The server clock is authoritative** for market open/lock times. Never trust a client timestamp.
 6. **Settlement is idempotent.** Running it twice must not double-pay. Guard on `settled_at`.
-7. **No live sports data integration.** No AFL API, no scraping, no Champion Data. All scores and stats are entered by the host. This is deliberate.
+7. **No live sports data settles anything.** No AFL API, no scraping, no Champion Data. Every score and stat that moves Bones or the Squares result is entered or confirmed by the host. The one exception, decided by Harry on 24 September 2026: `scripts/score-feed.mjs` passes Squiggle's live score stream to the host console as a one-tap suggestion. The feed never scores; the host's tap does, through the ordinary score action.
 
 ---
 
@@ -331,5 +331,5 @@ Designed to be legible from across a pub. Large score and squares grid, the curr
 - Branch per phase, PR into main. No direct commits to main.
 - Ask before adding any dependency.
 - Write the settlement function and its tests before any Kennel UI.
-- If a request seems to need payment handling or a live sports feed, stop and ask. It doesn't.
+- If a request seems to need payment handling, or a live sports feed beyond the host-confirmed score assist, stop and ask.
 - Optimise for reliability on one specific night, not for scale, extensibility, or reuse. This app runs for three hours and then never again.

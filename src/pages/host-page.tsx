@@ -1,5 +1,6 @@
 import { HostMarkets } from '../components/host-markets'
 import { HostFutures, HostStuds } from '../components/host-kennel'
+import { ScoreFeedPanel } from '../components/score-feed-panel'
 import { QuarterResults } from '../components/quarter-results'
 import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -91,6 +92,8 @@ export function HostPage() {
         {pending && <div className="inline-error" role="status">The {pending.label} request needs confirmation. Other controls wait until its result is known.
           <button className="button" disabled={Boolean(busy) || !online} onClick={() => void act(pending.label, pending.action, pending.key)}>Retry original host request</button>
         </div>}
+        <ScoreFeedPanel snapshot={snapshot} disabled={scoreDisabled}
+          onConfirm={(team, scoreType) => void act(`${team}-${scoreType}`, (key) => recordScore(session.token, team, scoreType, key))} />
         <section className="host-card score-controls">
           <div className="host-card__heading">
             <div><span className="eyebrow">Q{snapshot.game.quarter}</span><h2>Score entry</h2></div>

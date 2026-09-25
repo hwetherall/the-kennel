@@ -8,14 +8,18 @@ Friday 25 September 2026. Fremantle (home, down the side of the board) v Brisban
 Production is untouched until this section runs. The dev branch preview,
 <https://bk8ptwjs-yw5.insforge.site>, already runs this code.
 
-1. Review and merge the backend branch. The merge applies the four Phase 3
-   migrations and the edge function; no branch data is promoted.
+1. Back up production, review the merge, then merge the backend branch. The merge
+   applies five migrations (four Phase 3 ones plus the score feed); no branch data is
+   promoted. Read the dry run first: expect no `DROP TABLE` and no conflicts.
    ```sh
+   npx -y @insforge/cli backups create --project 51939a47-4e6a-4296-b74d-966852c9da01 --name pre-go-live --wait
    npx -y @insforge/cli branch merge phase-3-studs-futures --dry-run --save-sql merge-preview.sql
    npx -y @insforge/cli branch merge phase-3-studs-futures
    npx -y @insforge/cli branch switch --parent
+   npx -y @insforge/cli functions deploy kennel-api --file functions/kennel-api.ts
    npx -y @insforge/cli deployments deploy .
    ```
+   Then merge PR #7 into `main`.
 2. Load the night's setup (teams, athletes, Futures, Studs rounds) into production.
    Pass the production URL explicitly; `.env.local` points at the dev branch.
    ```sh
@@ -34,6 +38,17 @@ Production is untouched until this section runs. The dev branch preview,
    squares, link that board name to `Haz` under Purchase matching in the console.
 
 ## 2. Before the first bounce
+
+Start the live score assist on the laptop, and leave that terminal open all night:
+```sh
+KENNEL_FUNCTION_URL=https://bk8ptwjs.function2.insforge.app/kennel-api HOST_PIN=<production pin> npm run score-feed
+```
+A "Live feed assist" card appears above the score buttons. When the feed sees a
+score the app hasn't, it shows **Confirm Fremantle goal** (or similar). Check the TV,
+then tap it; it is the same as tapping the score button yourself. The feed never
+scores on its own. If the card says the feed is quiet, or the script dies, just
+score by hand. Rehearse it on the dev branch with `SQUIGGLE_GAME=test`, which
+streams random data.
 
 - Host console → Futures → **Open both Futures**.
 - Host console → Studs v Spuds → **Open Q1 Studs**.

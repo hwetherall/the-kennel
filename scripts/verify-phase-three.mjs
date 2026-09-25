@@ -14,18 +14,22 @@ const MIGRATIONS = [
   'migrations/20260916120000_phase-3-athletes-and-futures.sql',
   'migrations/20260916140000_phase-3-futures.sql',
   'migrations/20260924200000_grand-final-studs-and-board.sql',
+  'migrations/20260924230000_score-feed.sql',
 ]
 const SUITES = [
   ['tests/backend/phase-three-lock-strategy.sql', 'PHASE_THREE_LOCK_ASSERTIONS_PASSED_ROLLED_BACK'],
   ['tests/backend/phase-three-athletes-futures.sql', 'PHASE_THREE_ATHLETES_ASSERTIONS_PASSED_ROLLED_BACK'],
   ['tests/backend/phase-three-futures.sql', 'PHASE_THREE_FUTURES_ASSERTIONS_PASSED_ROLLED_BACK'],
   ['tests/backend/grand-final-studs.sql', 'GRAND_FINAL_STUDS_ASSERTIONS_PASSED_ROLLED_BACK'],
+  ['tests/backend/score-feed.sql', 'SCORE_FEED_ASSERTIONS_PASSED_ROLLED_BACK'],
 ]
 
 const project = JSON.parse(readFileSync('.insforge/project.json', 'utf8'))
 // --applied runs the same suites against a branch that already carries the migrations.
 const applied = process.argv.includes('--applied')
-assert(process.argv.slice(2).every((arg) => arg === '--applied'), 'Unknown verification argument')
+// --suite <path> runs one suite only, e.g. when other suites need an idle branch.
+const only = process.argv.includes('--suite') ? process.argv[process.argv.indexOf('--suite') + 1] : null
+assert(process.argv.slice(2).every((arg) => arg === '--applied' || arg === '--suite' || arg === only), 'Unknown verification argument')
 const { data: branches } = JSON.parse(execFileSync('npx', ['-y', '@insforge/cli', 'branch', 'list', '--json'], { encoding: 'utf8' }))
 const branch = branches.find((entry) => entry.id === project.project_id)
 assert(branch?.branch_state === 'ready', 'Switch to a ready development backend branch')
@@ -62,15 +66,17 @@ function runSuite(suitePath, expected) {
     `${suitePath} failed against the migrated schema: ${JSON.stringify(errorMessage ?? { stdout: result.stdout, stderr: result.stderr })}`)
 }
 
-for (const [suite, marker] of SUITES) runSuite(suite, marker)
+for (const [suite, marker] of SUITES) if (!only || suite === only) runSuite(suite, marker)
 
 // Phase 3 must not disturb Phase 2. Re-run both Phase 2 suites — including the
 // five goal-undo recovery scenarios — against the migrated schema, unchanged.
-for (const suite of ['tests/backend/phase-two.sql', 'tests/backend/phase-two-undo-recovery.sql']) {
+for (const suite of only ? [] : ['tests/backend/phase-two.sql', 'tests/backend/phase-two-undo-recovery.sql']) {
   runSuite(suite, 'PHASE_TWO_ASSERTIONS_PASSED_ROLLED_BACK')
 }
 
 // The rollback is the whole point, so prove it rather than trust it.
 if (!applied) assert.equal(presentCount(), 0, 'The migrations did not roll back')
 
-console.log(`Phase 3 assertions passed (${SUITES.length} suites), Phase 2 suites still pass on the migrated schema; all rolled back.`)
+console.log(only
+  ? `${only} passed; rolled back.`
+  : `Phase 3 assertions passed (${SUITES.length} suites), Phase 2 suites still pass on the migrated schema; all rolled back.`)

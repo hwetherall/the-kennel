@@ -48,7 +48,7 @@ const publicErrors = new Set([
   'This matchup is already resolved', 'Q1 baselines are zero', 'Totals must be whole numbers of zero or more',
   'This matchup never opened', 'Settle this matchup after its quarter siren', "Enter this matchup's baselines first",
   'A cumulative total cannot be lower than its baseline', 'That name has already been claimed',
-  'That name is on the squares board. Pick it from the list.',
+  'That name is on the squares board. Pick it from the list.', 'Invalid feed reading',
 ]);
 
 function resourceId(value: unknown, label: string) {
@@ -344,6 +344,18 @@ export default async function handler(req: Request): Promise<Response> {
           ...common,
           p_market_id: resourceId(body.marketId, 'Market'),
           p_reason: requiredString(body.reason, 'Void reason', 200),
+        }) });
+      case 'record_feed':
+        // A live-feed reading for the host console to compare. It never scores.
+        return json({ data: await rpc(backend, 'kennel_record_feed', {
+          p_host_token_hash: hostTokenHash,
+          p_source_game_id: integer(body.sourceGameId, 'Game', 1, 100000000),
+          p_home_goals: integer(body.homeGoals, 'Goals', 0, 100),
+          p_home_behinds: integer(body.homeBehinds, 'Behinds', 0, 100),
+          p_away_goals: integer(body.awayGoals, 'Goals', 0, 100),
+          p_away_behinds: integer(body.awayBehinds, 'Behinds', 0, 100),
+          p_time_label: optionalString(body.timeLabel, 40),
+          p_complete: body.complete === undefined || body.complete === null ? null : integer(body.complete, 'Complete', 0, 100),
         }) });
       case 'link_purchase':
         return json({ data: await rpc(backend, 'kennel_link_purchase', {

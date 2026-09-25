@@ -443,3 +443,8 @@ summary { cursor: pointer; min-height: 44px; padding-block: 12px; font-weight: 7
 .candidate-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px; border: 1px solid #d6deee; border-radius: 10px; padding: 12px; }
 .candidate { display: flex; align-items: center; gap: 8px; font-weight: 700; }
 .candidate input { width: auto; min-height: 0; }
+.score-feed { border: 2px solid #1f47a6; }
+.score-feed--quiet { border-color: #d91f3a; }
+.score-feed h2 { font-size: 1.2rem; }
+.feed-actions { display: grid; gap: 10px; }
+.feed-actions .button { min-height: 64px; font-size: 1.1rem; }

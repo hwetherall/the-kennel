@@ -188,4 +188,16 @@ describe('Grand Final edge boundary', () => {
     expect((await request({ action: 'settle_norm_smith', winningOptionId: optionId }, host)).status).toBe(200)
     expect(databaseRpc).toHaveBeenCalledWith('kennel_settle_norm_smith', expect.objectContaining({ p_winning_option_id: optionId }))
   })
+
+  it('forwards a feed reading for the host and rejects impossible totals', async () => {
+    const reading = { action: 'record_feed', sourceGameId: 38729, homeGoals: 7, homeBehinds: 3, awayGoals: 6, awayBehinds: 9, timeLabel: 'Q3 12:01', complete: 62 }
+    expect((await request(reading, host)).status).toBe(200)
+    expect(databaseRpc).toHaveBeenCalledWith('kennel_record_feed', expect.objectContaining({
+      p_source_game_id: 38729, p_home_goals: 7, p_away_behinds: 9, p_time_label: 'Q3 12:01', p_complete: 62,
+    }))
+    databaseRpc.mockClear()
+    expect((await request({ ...reading, homeGoals: -1 }, host)).status).toBe(400)
+    expect((await request(reading)).status).toBe(401)
+    expect(databaseRpc).not.toHaveBeenCalled()
+  })
 })
